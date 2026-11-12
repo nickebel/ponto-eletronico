@@ -62,7 +62,7 @@ export default {
       }
 
       return json({
-        application: "ponto-eletronico-api",
+        application: "ponto-eletronico",
         status: "development_only",
         database,
         message: "API inicial. Ainda não habilitada para registros oficiais de jornada."
