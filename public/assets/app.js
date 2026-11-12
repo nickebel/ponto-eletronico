@@ -52,6 +52,7 @@ function showApp(user, organization) {
   $("#adminNameDisplay").textContent = user.name || user.email;
   $("#adminInitials").textContent = (user.name || user.email).split(/\\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase();
   $("#adminRoleDisplay").textContent = user.role === "admin" ? "Administrador" : user.role;
+  $("#logoutBtn").hidden = false;
   $("#welcomeName").textContent = (user.name || "administrador").split(" ")[0];
   updateClock();
 }
