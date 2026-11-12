@@ -27,8 +27,8 @@ O GitHub Pages no GitHub Free requer um repositório público. Por isso, este re
 
 ## Cloudflare Worker e D1
 1. Instale Node.js LTS e execute `npm install`.
-2. Crie um banco D1 chamado `ponto-db` na sua conta Cloudflare.
-3. Adicione ao `wrangler.toml` o binding `DB`, o nome do banco, seu ID e a pasta de migrações.
+2. O banco D1 `ponto-db` foi criado e seu ID já está configurado em `wrangler.toml`.
+3. Confira se o banco aparece na mesma conta Cloudflare autenticada pelo Wrangler. O ID é um identificador, não um token.
 4. Configure no Cloudflare os segredos necessários com `wrangler secret put NOME_DO_SEGREDO`; nunca os commite.
 5. Teste localmente com `npm run dev:api`.
 6. Publique a API com `npm run deploy:api`.

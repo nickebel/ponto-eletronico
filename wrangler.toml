@@ -3,11 +3,9 @@ main = "worker/src/index.js"
 compatibility_date = "2026-11-12"
 workers_dev = true
 
-# Depois de criar o banco D1 na Cloudflare, descomente e preencha os dados reais.
-# Nunca inclua tokens, senhas ou dados pessoais neste arquivo.
-#
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "ponto-db"
-# database_id = "ID_REAL_DO_BANCO"
-# migrations_dir = "migrations"
+# D1 de desenvolvimento vinculado pelo identificador informado.
+[[d1_databases]]
+binding = "DB"
+database_name = "ponto-db"
+database_id = "1e237053-3aa7-45f4-8b22-8fe450fcf428"
+migrations_dir = "migrations"
