@@ -1,6 +1,6 @@
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-const API_BASE_URL = (window.APP_CONFIG?.API_BASE_URL || "").replace(/\\/+$/, "");
+const API_BASE_URL = (window.APP_CONFIG?.API_BASE_URL || "").replace(/\/+$/, "");
 const SESSION_KEY = "orbe_session_token";
 
 const labels = {

@@ -149,7 +149,7 @@ async function handleSetup(request, env, origin) {
 
   if (companyName.length < 2 || companyName.length > 120) return reply({ error: "Informe o nome ou razão social da empresa (2 a 120 caracteres)." }, 400, origin);
   if (adminName.length < 2 || adminName.length > 120) return reply({ error: "Informe o nome completo do administrador." }, 400, origin);
-  if (email.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) return reply({ error: "Informe um e-mail válido." }, 400, origin);
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return reply({ error: "Informe um e-mail válido." }, 400, origin);
   if (password.length < 12 || password.length > 128) return reply({ error: "A senha precisa ter entre 12 e 128 caracteres." }, 400, origin);
 
   try {
@@ -214,7 +214,7 @@ async function handleLogin(request, env, origin) {
 
   const email = String(data.email || "").trim().toLowerCase();
   const password = String(data.password || "");
-  if (email.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || password.length > 128) {
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length > 128) {
     return reply({ error: "E-mail ou senha inválidos." }, 400, origin);
   }
 
