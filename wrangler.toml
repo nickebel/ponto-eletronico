@@ -1,0 +1,11 @@
+name = "controle-de-jornada"
+pages_build_output_dir = "./public"
+compatibility_date = "2026-11-12"
+
+# Adicione o binding D1 depois de criar o banco na Cloudflare.
+# Nunca coloque credenciais ou dados pessoais neste arquivo.
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "ponto-db"
+# database_id = "ID_REAL_DO_BANCO"
+# migrations_dir = "migrations"

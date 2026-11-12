@@ -1,0 +1,12 @@
+{
+  "name": "controle-de-jornada",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Base de desenvolvimento de um sistema web de controle de jornada",
+  "scripts": {
+    "dev": "wrangler pages dev public"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
