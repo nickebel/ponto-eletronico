@@ -4,3 +4,5 @@
 window.APP_CONFIG = {
   API_BASE_URL: ""
 };
+
+// Frontend publicado em https://nickebel.github.io/ponto-eletronico/.
