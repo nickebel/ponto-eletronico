@@ -1,8 +1,6 @@
-// Configure aqui apenas a URL pública da API (não coloque tokens ou segredos).
-// Exemplo após publicar o Cloudflare Worker:
-// window.APP_CONFIG = { API_BASE_URL: "https://ponto-eletronico-api.SUA-CONTA.workers.dev" };
+// URL pública da API Cloudflare Worker. Não coloque tokens ou segredos neste arquivo.
 window.APP_CONFIG = {
-  API_BASE_URL: ""
+  API_BASE_URL: "https://ponto-eletronico.nickoalvex.workers.dev"
 };
 
 // Frontend publicado em https://nickebel.github.io/ponto-eletronico/.
