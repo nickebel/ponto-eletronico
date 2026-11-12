@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f4f6fb">
-  <meta name="description" content="Painel de controle de jornada — ambiente de desenvolvimento.">
+  <meta name="description" content="Orbe Ponto — controle de jornada em desenvolvimento.">
   <title>Orbe Ponto — Controle de Jornada</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,12 +12,55 @@
   <link rel="stylesheet" href="./assets/styles.css">
 </head>
 <body>
-  <div class="demo-bar"><span></span> AMBIENTE DE DEMONSTRAÇÃO · NÃO REGISTRA PONTO OFICIAL</div>
-  <div class="layout">
+  <div class="demo-bar"><span></span> AMBIENTE DE DESENVOLVIMENTO · NÃO REGISTRA PONTO OFICIAL</div>
+
+  <div class="auth-gate" id="authGate">
+    <section class="auth-card" aria-labelledby="authTitle">
+      <a class="auth-brand" href="./"><span class="brand-icon">◷</span><span><b>orbe</b><small>PONTO & JORNADA</small></span></a>
+      <div class="auth-eyebrow">CONTROLE DE JORNADA · ACESSO ADMINISTRATIVO</div>
+      <h1 id="authTitle">Conectando ao sistema</h1>
+      <p class="auth-intro" id="authIntro">Verificando a API e o banco de dados.</p>
+      <div class="auth-alert" id="authAlert" role="status" aria-live="polite" hidden></div>
+
+      <form id="setupForm" hidden>
+        <div class="form-section-title">Dados da empresa</div>
+        <label for="companyName">Nome ou razão social</label>
+        <input id="companyName" name="companyName" type="text" minlength="2" maxlength="120" autocomplete="organization" required>
+        <div class="form-section-title">Primeiro administrador</div>
+        <label for="adminName">Nome completo</label>
+        <input id="adminName" name="adminName" type="text" minlength="2" maxlength="120" autocomplete="name" required>
+        <label for="setupEmail">E-mail de acesso</label>
+        <input id="setupEmail" name="email" type="email" maxlength="254" autocomplete="username" required>
+        <label for="setupPassword">Crie uma senha</label>
+        <input id="setupPassword" name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required>
+        <small class="field-hint">Use pelo menos 12 caracteres e não reutilize senhas de outros serviços.</small>
+        <label for="setupPasswordConfirm">Confirme a senha</label>
+        <input id="setupPasswordConfirm" name="passwordConfirm" type="password" minlength="12" maxlength="128" autocomplete="new-password" required>
+        <div class="form-section-title">Chave temporária de configuração</div>
+        <label for="bootstrapKey">BOOTSTRAP_SECRET da Cloudflare</label>
+        <input id="bootstrapKey" name="bootstrapKey" type="password" minlength="32" maxlength="200" autocomplete="off" required>
+        <small class="field-hint">Chave criada em Settings → Variables and Secrets no Worker. Não é a senha do administrador.</small>
+        <button class="auth-submit" id="setupSubmit" type="submit">Criar empresa e administrador</button>
+      </form>
+
+      <form id="loginForm" hidden>
+        <label for="loginEmail">E-mail</label>
+        <input id="loginEmail" name="email" type="email" maxlength="254" autocomplete="username" required>
+        <label for="loginPassword">Senha</label>
+        <input id="loginPassword" name="password" type="password" maxlength="128" autocomplete="current-password" required>
+        <button class="auth-submit" id="loginSubmit" type="submit">Entrar no sistema</button>
+      </form>
+
+      <div class="auth-footnote"><span class="secure-dot"></span> Conexão HTTPS · Acesso administrativo</div>
+      <p class="auth-legal">Versão de desenvolvimento. Não utilizar para controle oficial de jornada antes da validação legal e técnica do REP-P.</p>
+    </section>
+  </div>
+
+  <div class="layout" id="appShell" hidden>
     <aside class="sidebar" id="sidebar">
       <a class="brand" href="#"><span class="brand-icon">◷</span><span><b>orbe</b><small>PONTO & JORNADA</small></span></a>
       <p class="nav-caption">ESPAÇO DE TRABALHO</p>
-      <div class="company"><span>AC</span><div><b>Empresa exemplo</b><small>Ambiente fictício</small></div></div>
+      <div class="company"><span>OR</span><div><b id="companyNameDisplay">Empresa</b><small>Ambiente administrativo</small></div></div>
       <p class="nav-caption">GERENCIAMENTO</p>
       <nav>
         <button class="nav-link active" data-view="overview">⌂ <span>Visão geral</span></button>
@@ -27,39 +70,46 @@
         <p class="nav-caption system-caption">SISTEMA</p>
         <button class="nav-link" data-view="settings">⚙ <span>Configurações</span></button>
       </nav>
-      <div class="sidebar-bottom"><div class="help"><b>Projeto em desenvolvimento</b><p>Esta versão é apenas uma prévia da interface e não possui registro oficial de jornada.</p><a href="https://www.gov.br/trabalho-e-emprego/pt-br/assuntos/inspecao-do-trabalho/fiscalizacao-do-trabalho/rep" target="_blank" rel="noreferrer">Orientações do MTE ↗</a></div><div class="user-chip"><span>AD</span><div><b>Administrador</b><small>Conta demonstrativa</small></div></div></div>
+      <div class="sidebar-bottom">
+        <div class="help"><b>Projeto em desenvolvimento</b><p>Esta versão ainda não possui registro oficial de jornada.</p><a href="https://www.gov.br/trabalho-e-emprego/pt-br/assuntos/inspecao-do-trabalho/fiscalizacao-do-trabalho/rep" target="_blank" rel="noreferrer">Orientações do MTE ↗</a></div>
+        <div class="user-chip"><span id="adminInitials">AD</span><div><b id="adminNameDisplay">Administrador</b><small id="adminRoleDisplay">Administrador</small></div></div>
+      </div>
     </aside>
+
     <main>
-      <header class="topbar"><button class="mobile-menu" id="mobileMenu" aria-label="Abrir menu">☰</button><div class="crumb">Empresa exemplo <span>/</span> <b id="breadcrumbCurrent">Visão geral</b></div><div class="top-date" id="todayLabel"></div></header>
+      <header class="topbar">
+        <button class="mobile-menu" id="mobileMenu" aria-label="Abrir menu">☰</button>
+        <div class="crumb"><span id="companyCrumb">Empresa</span> <span>/</span> <b id="breadcrumbCurrent">Visão geral</b></div>
+        <div class="top-actions"><div class="top-date" id="todayLabel"></div><button class="logout-button" id="logoutBtn" hidden>Sair</button></div>
+      </header>
       <div class="content">
         <section class="view active" id="view-overview">
-          <div class="heading"><div><p class="eyebrow">PAINEL ADMINISTRATIVO</p><h1>Bom dia, administrador <span>✦</span></h1><p>Acompanhe os indicadores ilustrativos da equipe.</p></div><button class="button secondary" id="exportDemo">↓ Exportar prévia</button></div>
-          <div class="notice"><b>ⓘ</b><div><strong>Prévia visual — dados fictícios</strong><p>Os nomes e números são exemplos. Nenhuma marcação é salva ou possui validade trabalhista.</p></div></div>
-          <div class="section-heading"><div><h2>Resumo de hoje</h2><p>Indicadores de demonstração</p></div><span class="date-chip" id="dateLong"></span></div>
+          <div class="heading"><div><p class="eyebrow">PAINEL ADMINISTRATIVO</p><h1>Bem-vindo, <span id="welcomeName">administrador</span> <span>✦</span></h1><p>Aqui você poderá acompanhar os dados da sua empresa.</p></div></div>
+          <div class="notice"><b>ⓘ</b><div><strong>Ambiente administrativo em construção</strong><p>O cadastro de funcionários e os registros de jornada serão habilitados nas próximas etapas. Nenhuma marcação oficial está disponível.</p></div></div>
+          <div class="section-heading"><div><h2>Resumo do ambiente</h2><p>Os indicadores serão carregados dos dados reais após a próxima etapa.</p></div><span class="date-chip" id="dateLong"></span></div>
           <div class="stats">
-            <article class="stat"><small>Funcionários ativos</small><strong>12 <em>/ 14</em></strong><span>● 12 colaboradores ativos</span></article>
-            <article class="stat"><small>Já registraram entrada</small><strong>09 <em>de 12</em></strong><span class="good">75% da equipe ativa</span></article>
-            <article class="stat"><small>Em intervalo</small><strong>02 <em>pessoas</em></strong><span>No horário de descanso</span></article>
-            <article class="stat"><small>Ocorrências</small><strong>01 <em>hoje</em></strong><span>Necessita conferência</span></article>
+            <article class="stat"><small>Funcionários ativos</small><strong>0</strong><span>Aguardando cadastro</span></article>
+            <article class="stat"><small>Marcações hoje</small><strong>0</strong><span>Registro de ponto desabilitado</span></article>
+            <article class="stat"><small>Jornadas cadastradas</small><strong>0</strong><span>Aguardando configuração</span></article>
+            <article class="stat"><small>Ocorrências</small><strong>0</strong><span>Sem dados registrados</span></article>
           </div>
           <div class="grid">
-            <section class="panel"><div class="panel-head"><div><h2>Movimentação de hoje</h2><p>Registros ilustrativos por colaborador</p></div><button class="text-button" data-go="records">Ver todos →</button></div><div class="table-wrap"><table><thead><tr><th>COLABORADOR</th><th>ENTRADA</th><th>INTERVALO</th><th>STATUS</th></tr></thead><tbody>
-              <tr><td><b>Mariana Costa</b><small>Administrativo</small></td><td>07:56</td><td>12:03 — 13:01</td><td><i class="status working">Em expediente</i></td></tr>
-              <tr><td><b>Rafael Alves</b><small>Operações</small></td><td>08:02</td><td>12:00 — 13:00</td><td><i class="status working">Em expediente</i></td></tr>
-              <tr><td><b>João Santos</b><small>Atendimento</small></td><td>08:14</td><td>—</td><td><i class="status late">Atraso · exemplo</i></td></tr>
-              <tr><td><b>Ana Lima</b><small>Financeiro</small></td><td>07:48</td><td>12:10 — 13:08</td><td><i class="status break">Em intervalo</i></td></tr>
-              <tr><td><b>Pedro Lima</b><small>Logística</small></td><td>—</td><td>—</td><td><i class="status pending">Não registrado</i></td></tr>
-            </tbody></table></div><div class="table-foot">Mostrando 5 de 12 funcionários <button class="text-button" data-go="employees">Ver equipe →</button></div></section>
-            <section class="panel clock-panel"><div class="panel-head"><div><h2>Horário de referência</h2><p>Relógio do navegador</p></div><span class="demo-tag">DEMO</span></div><div class="clock"><strong id="clockTime">--:--:--</strong><span id="clockDate">Carregando...</span><p>Não sincronizado com a Hora Legal Brasileira. Não utilizar para marcações oficiais.</p></div><h3>Atalhos rápidos</h3><button class="quick-link" data-go="employees">＋ <span><b>Funcionários</b><small>Área de cadastro planejada</small></span> →</button><button class="quick-link" data-go="reports">▤ <span><b>Relatórios</b><small>Modelos previstos</small></span> →</button></section>
+            <section class="panel empty dashboard-empty"><span>♙</span><h2>Sua equipe aparecerá aqui</h2><p>Depois de cadastrar os funcionários, este espaço mostrará a movimentação da jornada com os dados da empresa.</p><button class="text-button" data-go="employees">Ir para funcionários →</button></section>
+            <section class="panel clock-panel"><div class="panel-head"><div><h2>Horário de referência</h2><p>Relógio do navegador</p></div><span class="demo-tag">DEMO</span></div><div class="clock"><strong id="clockTime">--:--:--</strong><span id="clockDate">Carregando...</span><p>Este relógio é apenas visual e não é fonte confiável para registro de jornada.</p></div><h3>Atalhos rápidos</h3><button class="quick-link" data-go="employees">＋ <span><b>Funcionários</b><small>Próximo módulo</small></span> →</button><button class="quick-link" data-go="reports">▤ <span><b>Relatórios</b><small>Planejado para etapa futura</small></span> →</button></section>
           </div>
         </section>
-        <section class="view" id="view-employees"><div class="heading"><div><p class="eyebrow">GERENCIAMENTO</p><h1>Funcionários</h1><p>Estrutura de cadastro — sem dados reais.</p></div></div><div class="notice"><b>ⓘ</b><div><strong>Cadastro ainda não conectado</strong><p>Autenticação, permissões e proteção de dados serão implementadas antes do cadastro.</p></div></div><div class="panel empty"><span>♙</span><h2>Área de funcionários</h2><p>Aqui ficarão cadastro, vínculo, jornada contratual, status e permissões.</p></div></section>
-        <section class="view" id="view-records"><div class="heading"><div><p class="eyebrow">JORNADA</p><h1>Registros de ponto</h1><p>Fluxo de marcações planejado.</p></div></div><div class="notice warning"><b>⚠</b><div><strong>Registro oficial desabilitado</strong><p>Não faça marcações reais. Coletor, relógio confiável, NSR, integridade e comprovantes ainda não foram implementados.</p></div></div><div class="panel empty"><span>◷</span><h2>Coletor de marcações</h2><p>Será desenvolvido após o desenho técnico e a validação dos requisitos aplicáveis ao REP-P.</p></div></section>
+
+        <section class="view" id="view-employees"><div class="heading"><div><p class="eyebrow">GERENCIAMENTO</p><h1>Funcionários</h1><p>Gerenciamento da equipe da empresa.</p></div></div><div class="notice"><b>ⓘ</b><div><strong>Próxima etapa: cadastro de funcionários</strong><p>A autenticação está habilitada. O módulo de cadastro será implementado a seguir.</p></div></div><div class="panel empty"><span>♙</span><h2>Área de funcionários</h2><p>Aqui ficarão cadastro, vínculo, jornada contratual, status e permissões.</p></div></section>
+
+        <section class="view" id="view-records"><div class="heading"><div><p class="eyebrow">JORNADA</p><h1>Registros de ponto</h1><p>Fluxo de marcações planejado.</p></div></div><div class="notice warning"><b>⚠</b><div><strong>Registro oficial desabilitado</strong><p>Coletor, relógio confiável, NSR, integridade e comprovantes ainda não foram implementados.</p></div></div><div class="panel empty"><span>◷</span><h2>Coletor de marcações</h2><p>Será desenvolvido após o desenho técnico e a validação dos requisitos aplicáveis ao REP-P.</p></div></section>
+
         <section class="view" id="view-reports"><div class="heading"><div><p class="eyebrow">ANÁLISE</p><h1>Relatórios</h1><p>Modelos previstos para consulta e exportação.</p></div></div><div class="report-grid"><article class="panel"><h2>Espelho de ponto</h2><p>Conferência de marcações e ocorrências.</p><i>PLANEJADO</i></article><article class="panel"><h2>Resumo de jornada</h2><p>Horas previstas, realizadas e saldo de jornada.</p><i>PLANEJADO</i></article><article class="panel"><h2>Arquivos fiscais</h2><p>Exportações AFD e AEJ conforme leiautes vigentes.</p><i>EXIGE VALIDAÇÃO</i></article></div></section>
-        <section class="view" id="view-settings"><div class="heading"><div><p class="eyebrow">SISTEMA</p><h1>Configurações</h1><p>Infraestrutura e conformidade do projeto.</p></div></div><div class="panel settings"><div><b>Hospedagem</b><span>Cloudflare Pages + Functions · A configurar</span></div><div><b>Banco de dados</b><span>Cloudflare D1 · A configurar</span></div><div><b>Sincronização de horário</b><span>Pendente de implementação</span></div><div><b>Registro do programa no INPI</b><span>Pendente de avaliação</span></div><div><b>Atestado Técnico e Termo de Responsabilidade</b><span>Pendente</span></div></div></section>
+
+        <section class="view" id="view-settings"><div class="heading"><div><p class="eyebrow">SISTEMA</p><h1>Configurações</h1><p>Infraestrutura e conformidade do projeto.</p></div></div><div class="panel settings"><div><b>Hospedagem</b><span>GitHub Pages + Cloudflare Workers</span></div><div><b>Banco de dados</b><span>Cloudflare D1 · Conectado</span></div><div><b>Sincronização de horário</b><span>Pendente de implementação</span></div><div><b>Registro do programa no INPI</b><span>Pendente de avaliação</span></div><div><b>Atestado Técnico e Termo de Responsabilidade</b><span>Pendente</span></div></div></section>
       </div>
     </main>
   </div>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="./assets/config.js"></script>
   <script src="./assets/app.js" defer></script>
