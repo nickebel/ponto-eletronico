@@ -1,10 +1,13 @@
 {
-  "name": "controle-de-jornada",
-  "version": "0.1.0",
+  "name": "ponto-eletronico",
+  "version": "0.2.0",
   "private": true,
-  "description": "Base de desenvolvimento de um sistema web de controle de jornada",
+  "description": "Sistema web de controle de jornada: GitHub Pages + Cloudflare Workers + D1",
   "scripts": {
-    "dev": "wrangler pages dev public"
+    "dev:api": "wrangler dev --config wrangler.toml",
+    "deploy:api": "wrangler deploy --config wrangler.toml",
+    "db:local": "wrangler d1 migrations apply ponto-db --local",
+    "db:remote": "wrangler d1 migrations apply ponto-db --remote"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

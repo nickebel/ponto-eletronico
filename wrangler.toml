@@ -1,9 +1,11 @@
-name = "controle-de-jornada"
-pages_build_output_dir = "./public"
+name = "ponto-eletronico-api"
+main = "worker/src/index.js"
 compatibility_date = "2026-11-12"
+workers_dev = true
 
-# Adicione o binding D1 depois de criar o banco na Cloudflare.
-# Nunca coloque credenciais ou dados pessoais neste arquivo.
+# Depois de criar o banco D1 na Cloudflare, descomente e preencha os dados reais.
+# Nunca inclua tokens, senhas ou dados pessoais neste arquivo.
+#
 # [[d1_databases]]
 # binding = "DB"
 # database_name = "ponto-db"

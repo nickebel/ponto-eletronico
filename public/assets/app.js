@@ -49,8 +49,18 @@ function updateClock() {
 updateClock();
 window.setInterval(updateClock, 1000);
 
-// Diagnóstico opcional. Este endpoint não recebe nem armazena dados de funcionários.
-fetch("/api/health", { headers: { Accept: "application/json" } })
-  .then(response => response.ok ? response.json() : Promise.reject(new Error("HTTP " + response.status)))
-  .then(data => console.info("[Controle de Jornada] API:", data))
-  .catch(error => console.info("[Controle de Jornada] API ainda não conectada:", error.message));
+// O frontend é estático (GitHub Pages). Configure API_BASE_URL em config.js
+// após publicar o Worker. Nenhum registro de jornada é enviado por esta prévia.
+const API_BASE_URL = (window.APP_CONFIG?.API_BASE_URL || "").replace(/\/$/, "");
+
+if (API_BASE_URL) {
+  fetch(`${API_BASE_URL}/api/health`, {
+    headers: { Accept: "application/json" },
+    cache: "no-store"
+  })
+    .then(response => response.ok ? response.json() : Promise.reject(new Error("HTTP " + response.status)))
+    .then(data => console.info("[Controle de Jornada] API:", data))
+    .catch(error => console.info("[Controle de Jornada] API ainda não conectada:", error.message));
+} else {
+  console.info("[Controle de Jornada] Configure API_BASE_URL em public/assets/config.js quando o Worker estiver publicado.");
+}
