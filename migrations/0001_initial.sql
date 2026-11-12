@@ -1,4 +1,3 @@
--- Esquema inicial para revisão. Não aplicar em produção sem revisão técnica.
 CREATE TABLE IF NOT EXISTS organizations (
   id TEXT PRIMARY KEY,
   legal_name TEXT NOT NULL,
@@ -54,7 +53,6 @@ CREATE TABLE IF NOT EXISTS work_schedules (
   FOREIGN KEY (employee_id) REFERENCES employees(id)
 );
 
--- A estrutura sugere append-only, mas não implementa ainda as garantias legais de REP-P.
 CREATE TABLE IF NOT EXISTS time_records (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -89,9 +87,12 @@ CREATE TABLE IF NOT EXISTS audit_events (
 
 CREATE INDEX IF NOT EXISTS idx_employees_org_status
   ON employees (organization_id, status);
+
 CREATE INDEX IF NOT EXISTS idx_time_records_employee_time
   ON time_records (employee_id, recorded_at_utc);
+
 CREATE INDEX IF NOT EXISTS idx_time_records_org_nsr
   ON time_records (organization_id, nsr);
+
 CREATE INDEX IF NOT EXISTS idx_audit_events_org_time
   ON audit_events (organization_id, occurred_at_utc);
