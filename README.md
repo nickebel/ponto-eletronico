@@ -32,6 +32,8 @@ O GitHub Pages no GitHub Free requer um repositório público. Por isso, este re
 4. Configure no Cloudflare os segredos necessários com `wrangler secret put NOME_DO_SEGREDO`; nunca os commite.
 5. Teste localmente com `npm run dev:api`.
 6. Publique a API com `npm run deploy:api`.
+
+Autentique o terminal com `npx wrangler login` antes de executar os comandos remotos. O fluxo abre a página de autorização da Cloudflare no navegador.
 7. Depois de publicado, copie a URL `workers.dev` e configure `API_BASE_URL` em `public/assets/config.js`.
 
 O Worker permite CORS somente para o endereço GitHub Pages deste projeto e endereços locais de desenvolvimento. Se mudar o domínio, ajuste a lista de origens permitidas no Worker.

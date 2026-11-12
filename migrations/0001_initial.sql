@@ -1,6 +1,4 @@
 -- Esquema inicial para revisão. Não aplicar em produção sem revisão técnica.
-PRAGMA foreign_keys = ON;
-
 CREATE TABLE IF NOT EXISTS organizations (
   id TEXT PRIMARY KEY,
   legal_name TEXT NOT NULL,
