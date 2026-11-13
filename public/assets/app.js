@@ -161,6 +161,7 @@ function navigate(view) {
   window.scrollTo({ top: 0, behavior: "smooth" });
   if (view === "employees") loadEmployees();
   if (view === "schedules") loadSchedules();
+  if (view === "records") loadDemoRecords();
 }
 $$(".nav-link").forEach(button => button.addEventListener("click", () => navigate(button.dataset.view)));
 $$("[data-go]").forEach(button => button.addEventListener("click", () => navigate(button.dataset.go)));
@@ -506,6 +507,131 @@ $("#scheduleRows").addEventListener("click", async event => {
     }
   }
 });
+
+
+const demoRecordLabels = {
+  entry: "Entrada",
+  break_start: "Início do intervalo",
+  break_end: "Retorno do intervalo",
+  exit: "Saída"
+};
+let demoRecordEmployees = [];
+let demoRecordCache = [];
+
+function fillDemoRecordEmployees() {
+  const formSelect = $("#demoRecordEmployee");
+  const filterSelect = $("#demoRecordEmployeeFilter");
+  const formValue = formSelect.value;
+  const filterValue = filterSelect.value;
+  formSelect.innerHTML = '<option value="">Selecione um funcionário</option>' +
+    demoRecordEmployees.map(employee =>
+      '<option value="' + escapeHtml(employee.id) + '">' +
+      escapeHtml(employee.employee_code + " · " + employee.full_name) +
+      '</option>'
+    ).join("");
+  filterSelect.innerHTML = '<option value="">Todos os funcionários</option>' +
+    demoRecordEmployees.map(employee =>
+      '<option value="' + escapeHtml(employee.id) + '">' +
+      escapeHtml(employee.employee_code + " · " + employee.full_name) +
+      '</option>'
+    ).join("");
+  if (demoRecordEmployees.some(employee => employee.id === formValue)) formSelect.value = formValue;
+  else if (demoRecordEmployees.length) formSelect.value = demoRecordEmployees[0].id;
+  if (demoRecordEmployees.some(employee => employee.id === filterValue)) filterSelect.value = filterValue;
+}
+
+function formatDemoRecordDate(record) {
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "medium",
+      timeZone: record.timezone || "America/Maceio"
+    }).format(new Date(record.recorded_at_utc));
+  } catch {
+    return new Date(record.recorded_at_utc).toLocaleString("pt-BR");
+  }
+}
+
+function renderDemoRecords() {
+  const rows = $("#demoRecordRows");
+  const filter = $("#demoRecordEmployeeFilter").value;
+  const visible = demoRecordCache.filter(record => !filter || record.employee_id === filter);
+  $("#demoRecordSummary").textContent = visible.length + (visible.length === 1 ? " marcação de teste" : " marcações de teste") + " · histórico recente";
+  if (!visible.length) {
+    rows.innerHTML = '<tr><td colspan="4" class="table-empty">Nenhuma marcação de teste encontrada.</td></tr>';
+    return;
+  }
+  rows.innerHTML = visible.map(record => {
+    const kind = record.record_type === "break_start" ? "break" : record.record_type === "exit" ? "pending" : "working";
+    return '<tr>' +
+      '<td><b>' + escapeHtml(record.employee_name) + '</b><small>' + escapeHtml(record.employee_code) + '</small></td>' +
+      '<td><span class="status ' + kind + '">' + escapeHtml(demoRecordLabels[record.record_type] || record.record_type) + '</span></td>' +
+      '<td><b>' + escapeHtml(formatDemoRecordDate(record)) + '</b></td>' +
+      '<td>' + escapeHtml(record.timezone || "—") + '</td>' +
+      '</tr>';
+  }).join("");
+}
+
+async function loadDemoRecords() {
+  const rows = $("#demoRecordRows");
+  rows.innerHTML = '<tr><td colspan="4" class="table-empty">Carregando marcações...</td></tr>';
+  try {
+    const employeesResult = await apiRequest("employees?status=active");
+    demoRecordEmployees = Array.isArray(employeesResult.employees) ? employeesResult.employees : [];
+    fillDemoRecordEmployees();
+    const filter = $("#demoRecordEmployeeFilter").value;
+    const path = filter ? "demo-records?employeeId=" + encodeURIComponent(filter) : "demo-records";
+    const result = await apiRequest(path);
+    demoRecordCache = Array.isArray(result.records) ? result.records : [];
+    renderDemoRecords();
+    $("#registerDemoRecordBtn").disabled = demoRecordEmployees.length === 0;
+    if (!demoRecordEmployees.length) {
+      $("#demoRecordSummary").textContent = "Cadastre ou reative um funcionário para iniciar os testes.";
+      $("#demoRecordEmployee").innerHTML = '<option value="">Nenhum funcionário ativo</option>';
+    }
+  } catch (error) {
+    rows.innerHTML = '<tr><td colspan="4" class="table-empty">' + escapeHtml(error.message) + '</td></tr>';
+    $("#demoRecordSummary").textContent = "Não foi possível carregar o histórico.";
+    notify(error.message);
+  }
+}
+
+$("#demoRecordForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = $("#registerDemoRecordBtn");
+  const payload = {
+    employeeId: $("#demoRecordEmployee").value,
+    recordType: $("#demoRecordType").value
+  };
+  button.disabled = true;
+  button.textContent = "Registrando...";
+  try {
+    const result = await apiRequest("demo-records", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    await loadDemoRecords();
+    $("#demoRecordType").value = "entry";
+    notify("Marcação de teste registrada no horário do servidor.");
+  } catch (error) {
+    notify(error.message);
+  } finally {
+    button.disabled = demoRecordEmployees.length === 0;
+    button.textContent = "Registrar marcação de teste";
+  }
+});
+$("#demoRecordEmployeeFilter").addEventListener("change", async () => {
+  try {
+    const filter = $("#demoRecordEmployeeFilter").value;
+    const path = filter ? "demo-records?employeeId=" + encodeURIComponent(filter) : "demo-records";
+    const result = await apiRequest(path);
+    demoRecordCache = Array.isArray(result.records) ? result.records : [];
+    renderDemoRecords();
+  } catch (error) {
+    notify(error.message);
+  }
+});
+$("#refreshDemoRecordsBtn").addEventListener("click", loadDemoRecords);
 
 function updateClock() {
   const now = new Date();

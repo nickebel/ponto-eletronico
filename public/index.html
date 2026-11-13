@@ -183,7 +183,38 @@
           </section>
         </section>
 
-        <section class="view" id="view-records"><div class="heading"><div><p class="eyebrow">JORNADA</p><h1>Registros de ponto</h1><p>Fluxo de marcações planejado.</p></div></div><div class="notice warning"><b>⚠</b><div><strong>Registro oficial desabilitado</strong><p>Coletor, relógio confiável, NSR, integridade e comprovantes ainda não foram implementados.</p></div></div><div class="panel empty"><span>◷</span><h2>Coletor de marcações</h2><p>Será desenvolvido após o desenho técnico e a validação dos requisitos aplicáveis ao REP-P.</p></div></section>
+        <section class="view" id="view-records">
+          <div class="heading">
+            <div><p class="eyebrow">JORNADA</p><h1>Registros de ponto</h1><p>Simulação controlada de marcações para validar o fluxo do sistema.</p></div>
+            <button class="button secondary" id="refreshDemoRecordsBtn" type="button">↻ Atualizar</button>
+          </div>
+          <div class="notice warning">
+            <b>⚠</b>
+            <div><strong>Modo de demonstração — não é registro oficial de ponto</strong><p>As marcações desta tela ficam em uma tabela separada. Não geram NSR oficial, AFD, AEJ, assinatura digital ou comprovante legal. O horário é fornecido pelo servidor e as marcações não podem ser editadas ou excluídas.</p></div>
+          </div>
+          <section class="panel demo-record-form-panel">
+            <div class="panel-head"><div><h2>Registrar marcação de teste</h2><p>Use somente o funcionário fictício durante os testes.</p></div><span class="demo-tag">AMBIENTE DE TESTE</span></div>
+            <form id="demoRecordForm" class="demo-record-form">
+              <div class="demo-record-grid">
+                <div><label for="demoRecordEmployee">Funcionário *</label><select id="demoRecordEmployee" required><option value="">Carregando funcionários...</option></select></div>
+                <div><label for="demoRecordType">Tipo de marcação *</label><select id="demoRecordType" required><option value="entry">Entrada</option><option value="break_start">Início do intervalo</option><option value="break_end">Retorno do intervalo</option><option value="exit">Saída</option></select></div>
+              </div>
+              <div class="demo-record-actions"><button class="button primary-button" id="registerDemoRecordBtn" type="submit">Registrar marcação de teste</button></div>
+            </form>
+          </section>
+          <section class="panel demo-record-list-panel">
+            <div class="employee-toolbar">
+              <div><h2>Histórico de marcações de teste</h2><p id="demoRecordSummary">Carregando histórico...</p></div>
+              <div class="employee-filters"><select id="demoRecordEmployeeFilter" aria-label="Filtrar por funcionário"><option value="">Todos os funcionários</option></select></div>
+            </div>
+            <div class="employee-table-wrap">
+              <table class="demo-record-table">
+                <thead><tr><th>FUNCIONÁRIO</th><th>MARCAÇÃO</th><th>DATA E HORA</th><th>FUSO</th></tr></thead>
+                <tbody id="demoRecordRows"><tr><td colspan="4" class="table-empty">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
 
         <section class="view" id="view-reports"><div class="heading"><div><p class="eyebrow">ANÁLISE</p><h1>Relatórios</h1><p>Modelos previstos para consulta e exportação.</p></div></div><div class="report-grid"><article class="panel"><h2>Espelho de ponto</h2><p>Conferência de marcações e ocorrências.</p><i>PLANEJADO</i></article><article class="panel"><h2>Resumo de jornada</h2><p>Horas previstas, realizadas e saldo de jornada.</p><i>PLANEJADO</i></article><article class="panel"><h2>Arquivos fiscais</h2><p>Exportações AFD e AEJ conforme leiautes vigentes.</p><i>EXIGE VALIDAÇÃO</i></article></div></section>
 

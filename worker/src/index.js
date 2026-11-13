@@ -434,6 +434,111 @@ async function handleSchedules(request, env, origin, session, scheduleId = null)
   }
 }
 
+
+const DEMO_RECORD_LABELS = {
+  entry: "Entrada",
+  break_start: "Início do intervalo",
+  break_end: "Retorno do intervalo",
+  exit: "Saída"
+};
+
+function dateInTimezone(value, timeZone) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(new Date(value));
+    const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+    return values.year + "-" + values.month + "-" + values.day;
+  } catch {
+    return new Date(value).toISOString().slice(0, 10);
+  }
+}
+
+function allowedDemoRecordTypes(lastType) {
+  if (!lastType || lastType === "exit") return ["entry"];
+  if (lastType === "entry" || lastType === "break_end") return ["break_start", "exit"];
+  if (lastType === "break_start") return ["break_end"];
+  return ["entry"];
+}
+
+async function handleDemoRecords(request, env, origin, session) {
+  if (!session) return reply({ error: "Sessão inválida ou expirada." }, 401, origin);
+  if (!canManageEmployees(session)) return reply({ error: "Você não tem permissão para registrar marcações de teste." }, 403, origin);
+
+  const organizationId = session.organization.id;
+  const actorId = session.user.id;
+
+  try {
+    const org = await env.DB.prepare("SELECT timezone FROM organizations WHERE id=?").bind(organizationId).first();
+    const timeZone = org?.timezone || "America/Maceio";
+
+    if (request.method === "GET") {
+      const employeeId = new URL(request.url).searchParams.get("employeeId");
+      const sql = employeeId
+        ? "SELECT r.id,r.employee_id,e.employee_code,e.full_name AS employee_name,r.record_type,r.recorded_at_utc,r.timezone,r.created_at FROM demo_time_records r JOIN employees e ON e.id=r.employee_id AND e.organization_id=r.organization_id WHERE r.organization_id=? AND r.employee_id=? ORDER BY r.recorded_at_utc DESC LIMIT 100"
+        : "SELECT r.id,r.employee_id,e.employee_code,e.full_name AS employee_name,r.record_type,r.recorded_at_utc,r.timezone,r.created_at FROM demo_time_records r JOIN employees e ON e.id=r.employee_id AND e.organization_id=r.organization_id WHERE r.organization_id=? ORDER BY r.recorded_at_utc DESC LIMIT 100";
+      const rows = employeeId
+        ? await env.DB.prepare(sql).bind(organizationId, employeeId).all()
+        : await env.DB.prepare(sql).bind(organizationId).all();
+      return reply({ records: rows.results || [], timezone: timeZone, mode: "demonstration_only" }, 200, origin);
+    }
+
+    if (request.method !== "POST") return reply({ error: "Método não permitido." }, 405, origin);
+
+    let data;
+    try { data = await bodyJson(request); }
+    catch (error) {
+      return reply({ error: error.message === "REQUEST_TOO_LARGE" ? "Requisição muito grande." : "JSON inválido." }, 400, origin);
+    }
+
+    const employeeId = String(data.employeeId || "").trim();
+    const recordType = String(data.recordType || "").trim();
+    if (!employeeId) return reply({ error: "Selecione um funcionário." }, 400, origin);
+    if (!Object.prototype.hasOwnProperty.call(DEMO_RECORD_LABELS, recordType)) {
+      return reply({ error: "Selecione um tipo de marcação válido." }, 400, origin);
+    }
+
+    const employee = await env.DB.prepare(
+      "SELECT id,employee_code,full_name FROM employees WHERE id=? AND organization_id=? AND status='active'"
+    ).bind(employeeId, organizationId).first();
+    if (!employee) return reply({ error: "Funcionário ativo não encontrado nesta empresa." }, 404, origin);
+
+    const now = new Date();
+    const recordedAt = now.toISOString();
+    const today = dateInTimezone(recordedAt, timeZone);
+    const recent = await env.DB.prepare(
+      "SELECT record_type,recorded_at_utc FROM demo_time_records WHERE organization_id=? AND employee_id=? ORDER BY recorded_at_utc DESC LIMIT 40"
+    ).bind(organizationId, employeeId).all();
+    const lastToday = (recent.results || []).find(item => dateInTimezone(item.recorded_at_utc, timeZone) === today);
+    const allowed = allowedDemoRecordTypes(lastToday?.record_type || null);
+
+    if (!allowed.includes(recordType)) {
+      const next = allowed.map(type => DEMO_RECORD_LABELS[type]).join(" ou ");
+      return reply({ error: "Marcação fora da sequência. Próxima marcação permitida: " + next + "." }, 409, origin);
+    }
+
+    const id = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO demo_time_records (id,organization_id,employee_id,record_type,recorded_at_utc,timezone,created_by_user_id,created_at) VALUES (?,?,?,?,?,?,?,?)")
+        .bind(id, organizationId, employeeId, recordType, recordedAt, timeZone, actorId, recordedAt),
+      env.DB.prepare("INSERT INTO audit_events (id,organization_id,actor_user_id,subject_type,subject_id,action,metadata_json,occurred_at_utc) VALUES (?,?,?,?,?,?,?,?)")
+        .bind(crypto.randomUUID(), organizationId, actorId, "demo_time_record", id, "demo_time_record.created", JSON.stringify({ employee_id: employeeId, record_type: recordType, demonstration_only: true }), recordedAt)
+    ]);
+
+    const created = await env.DB.prepare(
+      "SELECT r.id,r.employee_id,e.employee_code,e.full_name AS employee_name,r.record_type,r.recorded_at_utc,r.timezone,r.created_at FROM demo_time_records r JOIN employees e ON e.id=r.employee_id AND e.organization_id=r.organization_id WHERE r.id=? AND r.organization_id=?"
+    ).bind(id, organizationId).first();
+
+    return reply({ success: true, record: created, mode: "demonstration_only" }, 201, origin);
+  } catch (error) {
+    console.error("Demo time record operation failed:", error);
+    return reply({ error: "Não foi possível processar a marcação de teste. Verifique se a migração 0004_demo_time_records foi aplicada." }, 500, origin);
+  }
+}
+
 async function throttleKey(request, email) {
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   return digest(`${ip}|${email}`);
@@ -549,6 +654,11 @@ export default {
         const session = await getSession(request, env.DB);
         return await handleSchedules(request, env, origin, session, scheduleMatch[1]);
       }
+      if (url.pathname === "/api/demo-records" && ["GET", "POST"].includes(request.method)) {
+        const session = await getSession(request, env.DB);
+        return await handleDemoRecords(request, env, origin, session);
+      }
+
 
       if (url.pathname === "/api/auth/me" && request.method === "GET") {
         const session = await getSession(request, env.DB);
