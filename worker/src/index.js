@@ -152,16 +152,19 @@ async function handleSetup(request, env, origin) {
   if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return reply({ error: "Informe um e-mail válido." }, 400, origin);
   if (password.length < 12 || password.length > 128) return reply({ error: "A senha precisa ter entre 12 e 128 caracteres." }, 400, origin);
 
+  let setupStage = "checking_existing_setup";
   try {
     const alreadyDone = await env.DB.prepare("SELECT value FROM app_settings WHERE key=?").bind("setup_complete").first();
     if (alreadyDone) return reply({ error: "A configuração inicial já foi concluída. Entre com seu login." }, 409, origin);
 
+    setupStage = "hashing_admin_password";
     const passwordHash = await makePasswordHash(password);
     const now = new Date().toISOString();
     const organizationId = crypto.randomUUID();
     const userId = crypto.randomUUID();
 
     // O lote D1 é transacional: a trava, a empresa e o administrador entram juntos.
+    setupStage = "saving_company_and_admin";
     await env.DB.batch([
       env.DB.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?)").bind("setup_complete", "1", now),
       env.DB.prepare("INSERT INTO organizations (id,legal_name,timezone,created_at) VALUES (?,?,?,?)").bind(organizationId, companyName, "America/Maceio", now),
@@ -169,6 +172,7 @@ async function handleSetup(request, env, origin) {
         .bind(userId, organizationId, adminName, email, passwordHash, now, now)
     ]);
 
+    setupStage = "creating_admin_session";
     const session = await createSession(env.DB, userId);
     return reply({
       success: true,
@@ -178,11 +182,18 @@ async function handleSetup(request, env, origin) {
       organization: { id: organizationId, name: companyName }
     }, 201, origin);
   } catch (error) {
-    console.error("Initial setup failed:", error);
+    console.error("Initial setup failed:", {
+      stage: setupStage,
+      message: String(error?.message || error || "unknown error")
+    });
     if (String(error).includes("UNIQUE constraint failed")) {
       return reply({ error: "A configuração inicial já foi concluída. Atualize a página e tente entrar." }, 409, origin);
     }
-    return reply({ error: "Não foi possível criar o ambiente. Confira a migração e tente novamente." }, 500, origin);
+    return reply({
+      error: "Não foi possível criar o ambiente. Confira a migração e tente novamente.",
+      code: "SETUP_FAILED",
+      stage: setupStage
+    }, 500, origin);
   }
 }
 async function throttleKey(request, email) {
