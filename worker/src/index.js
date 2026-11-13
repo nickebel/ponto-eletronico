@@ -211,6 +211,96 @@ async function handleSetup(request, env, origin) {
     }, 500, origin);
   }
 }
+
+function validDateOnly(value) {
+  if (value == null || value === "") return true;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(value + "T00:00:00.000Z");
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function employeeInput(data) {
+  const employeeCode = String(data.employeeCode || "").trim();
+  const fullName = String(data.fullName || "").trim();
+  const jobTitle = String(data.jobTitle || "").trim();
+  const hiredOn = String(data.hiredOn || "").trim() || null;
+  const terminatedOn = String(data.terminatedOn || "").trim() || null;
+  const status = data.status === "inactive" ? "inactive" : "active";
+  if (!employeeCode || employeeCode.length > 30) return { error: "Informe uma matrícula com até 30 caracteres." };
+  if (fullName.length < 2 || fullName.length > 120) return { error: "Informe o nome completo (2 a 120 caracteres)." };
+  if (jobTitle.length > 120) return { error: "O cargo deve ter até 120 caracteres." };
+  if (!validDateOnly(hiredOn) || !validDateOnly(terminatedOn)) return { error: "Informe datas válidas." };
+  return { value: { employeeCode, fullName, jobTitle: jobTitle || null, hiredOn, status, terminatedOn: status === "inactive" ? terminatedOn : null } };
+}
+
+function canManageEmployees(session) {
+  return session && ["admin", "manager"].includes(session.user.role);
+}
+
+async function handleEmployees(request, env, origin, session, employeeId = null) {
+  if (!session) return reply({ error: "Sessão inválida ou expirada." }, 401, origin);
+  if (!canManageEmployees(session)) return reply({ error: "Você não tem permissão para gerenciar funcionários." }, 403, origin);
+
+  const organizationId = session.organization.id;
+  const actorId = session.user.id;
+
+  if (request.method === "GET" && !employeeId) {
+    try {
+      const status = new URL(request.url).searchParams.get("status") || "active";
+      if (!["active", "inactive", "all"].includes(status)) return reply({ error: "Filtro de situação inválido." }, 400, origin);
+      const sql = status === "all"
+        ? "SELECT id, employee_code, full_name, job_title, status, hired_on, terminated_on, created_at, updated_at FROM employees WHERE organization_id=? ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, full_name COLLATE NOCASE"
+        : "SELECT id, employee_code, full_name, job_title, status, hired_on, terminated_on, created_at, updated_at FROM employees WHERE organization_id=? AND status=? ORDER BY full_name COLLATE NOCASE";
+      const rows = status === "all"
+        ? await env.DB.prepare(sql).bind(organizationId).all()
+        : await env.DB.prepare(sql).bind(organizationId, status).all();
+      return reply({ employees: rows.results || [] }, 200, origin);
+    } catch (error) {
+      console.error("List employees failed:", error);
+      return reply({ error: "Não foi possível carregar os funcionários." }, 500, origin);
+    }
+  }
+
+  if (request.method !== "POST" && request.method !== "PUT") return reply({ error: "Método não permitido." }, 405, origin);
+  if ((request.method === "POST" && employeeId) || (request.method === "PUT" && !employeeId)) return reply({ error: "Rota não encontrada." }, 404, origin);
+
+  let data;
+  try { data = await bodyJson(request); }
+  catch (error) { return reply({ error: error.message === "REQUEST_TOO_LARGE" ? "Requisição muito grande." : "JSON inválido." }, 400, origin); }
+
+  const parsed = employeeInput(data);
+  if (parsed.error) return reply({ error: parsed.error }, 400, origin);
+  const employee = parsed.value;
+  const now = new Date().toISOString();
+
+  try {
+    if (request.method === "POST") {
+      const id = crypto.randomUUID();
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO employees (id,organization_id,employee_code,full_name,job_title,status,hired_on,terminated_on,created_at,updated_at) VALUES (?,?,?,?,?,'active',?,NULL,?,?)").bind(id, organizationId, employee.employeeCode, employee.fullName, employee.jobTitle, employee.hiredOn, now, now),
+        env.DB.prepare("INSERT INTO audit_events (id,organization_id,actor_user_id,subject_type,subject_id,action,metadata_json,occurred_at_utc) VALUES (?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), organizationId, actorId, "employee", id, "employee.created", JSON.stringify({ employee_code: employee.employeeCode }), now)
+      ]);
+      const created = await env.DB.prepare("SELECT id, employee_code, full_name, job_title, status, hired_on, terminated_on, created_at, updated_at FROM employees WHERE id=? AND organization_id=?").bind(id, organizationId).first();
+      return reply({ success: true, employee: created }, 201, origin);
+    }
+
+    const existing = await env.DB.prepare("SELECT id FROM employees WHERE id=? AND organization_id=?").bind(employeeId, organizationId).first();
+    if (!existing) return reply({ error: "Funcionário não encontrado." }, 404, origin);
+
+    await env.DB.batch([
+      env.DB.prepare("UPDATE employees SET employee_code=?, full_name=?, job_title=?, status=?, hired_on=?, terminated_on=?, updated_at=? WHERE id=? AND organization_id=?").bind(employee.employeeCode, employee.fullName, employee.jobTitle, employee.status, employee.hiredOn, employee.terminatedOn, now, employeeId, organizationId),
+      env.DB.prepare("INSERT INTO audit_events (id,organization_id,actor_user_id,subject_type,subject_id,action,metadata_json,occurred_at_utc) VALUES (?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), organizationId, actorId, "employee", employeeId, employee.status === "inactive" ? "employee.deactivated_or_updated" : "employee.updated", JSON.stringify({ employee_code: employee.employeeCode, status: employee.status }), now)
+    ]);
+
+    const updated = await env.DB.prepare("SELECT id, employee_code, full_name, job_title, status, hired_on, terminated_on, created_at, updated_at FROM employees WHERE id=? AND organization_id=?").bind(employeeId, organizationId).first();
+    return reply({ success: true, employee: updated }, 200, origin);
+  } catch (error) {
+    console.error("Save employee failed:", error);
+    if (String(error).includes("UNIQUE constraint failed")) return reply({ error: "Já existe um funcionário com essa matrícula nesta empresa." }, 409, origin);
+    return reply({ error: "Não foi possível salvar o funcionário. Verifique os dados e tente novamente." }, 500, origin);
+  }
+}
+
 async function throttleKey(request, email) {
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   return digest(`${ip}|${email}`);
@@ -306,6 +396,16 @@ export default {
       if (url.pathname === "/api/setup/status" && request.method === "GET") return await handleSetupStatus(env.DB, origin);
       if (url.pathname === "/api/setup" && request.method === "POST") return await handleSetup(request, env, origin);
       if (url.pathname === "/api/auth/login" && request.method === "POST") return await handleLogin(request, env, origin);
+
+      if (url.pathname === "/api/employees" && ["GET", "POST"].includes(request.method)) {
+        const session = await getSession(request, env.DB);
+        return await handleEmployees(request, env, origin, session);
+      }
+      const employeeMatch = url.pathname.match(/^\/api\/employees\/([0-9a-f-]{36})$/i);
+      if (employeeMatch && request.method === "PUT") {
+        const session = await getSession(request, env.DB);
+        return await handleEmployees(request, env, origin, session, employeeMatch[1]);
+      }
 
       if (url.pathname === "/api/auth/me" && request.method === "GET") {
         const session = await getSession(request, env.DB);
