@@ -65,6 +65,7 @@
       <nav>
         <button class="nav-link active" data-view="overview">⌂ <span>Visão geral</span></button>
         <button class="nav-link" data-view="employees">♙ <span>Funcionários</span></button>
+        <button class="nav-link" data-view="schedules">▦ <span>Jornadas e escalas</span></button>
         <button class="nav-link" data-view="records">◷ <span>Registros de ponto</span></button>
         <button class="nav-link" data-view="reports">▤ <span>Relatórios</span></button>
         <p class="nav-caption system-caption">SISTEMA</p>
@@ -134,6 +135,49 @@
               <table class="employee-table">
                 <thead><tr><th>FUNCIONÁRIO</th><th>MATRÍCULA</th><th>ADMISSÃO</th><th>SITUAÇÃO</th><th>AÇÕES</th></tr></thead>
                 <tbody id="employeeRows"><tr><td colspan="5" class="table-empty">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="view-schedules">
+          <div class="heading">
+            <div><p class="eyebrow">PLANEJAMENTO DE JORNADA</p><h1>Jornadas e escalas</h1><p>Defina os dias e horários previstos para cada funcionário.</p></div>
+            <button class="button primary-button" id="addScheduleBtn" type="button">＋ Nova jornada</button>
+          </div>
+          <div class="notice"><b>ⓘ</b><div><strong>Escalas planejadas, não marcações de ponto</strong><p>Esta etapa organiza horários previstos. Não registra presença, horas trabalhadas ou ponto oficial. Jornadas que atravessam a meia-noite ainda não são aceitas.</p></div></div>
+
+          <section class="panel schedule-form-panel" id="scheduleFormPanel" hidden>
+            <div class="panel-head"><div><h2 id="scheduleFormTitle">Nova jornada</h2><p>Cadastre um horário para um dia da semana e período de vigência.</p></div></div>
+            <form id="scheduleForm" class="schedule-form">
+              <div class="schedule-form-grid">
+                <div><label for="scheduleEmployee">Funcionário *</label><select id="scheduleEmployee" required><option value="">Selecione um funcionário</option></select></div>
+                <div><label for="scheduleWeekday">Dia da semana *</label><select id="scheduleWeekday" required>
+                  <option value="1">Segunda-feira</option><option value="2">Terça-feira</option><option value="3">Quarta-feira</option><option value="4">Quinta-feira</option><option value="5">Sexta-feira</option><option value="6">Sábado</option><option value="0">Domingo</option>
+                </select></div>
+                <div><label for="scheduleStart">Entrada *</label><input id="scheduleStart" type="time" required></div>
+                <div><label for="scheduleEnd">Saída *</label><input id="scheduleEnd" type="time" required></div>
+                <div><label for="scheduleBreakStart">Início do intervalo</label><input id="scheduleBreakStart" type="time"></div>
+                <div><label for="scheduleBreakEnd">Fim do intervalo</label><input id="scheduleBreakEnd" type="time"></div>
+                <div><label for="scheduleEffectiveFrom">Vigente a partir de *</label><input id="scheduleEffectiveFrom" type="date" required></div>
+                <div><label for="scheduleEffectiveUntil">Vigente até</label><input id="scheduleEffectiveUntil" type="date"></div>
+              </div>
+              <div class="schedule-form-actions"><button class="button secondary" id="cancelScheduleBtn" type="button">Cancelar</button><button class="button primary-button" id="saveScheduleBtn" type="submit">Salvar jornada</button></div>
+            </form>
+          </section>
+
+          <section class="panel schedule-list-panel">
+            <div class="employee-toolbar">
+              <div><h2>Escalas cadastradas</h2><p id="scheduleSummary">Carregando jornadas...</p></div>
+              <div class="employee-filters">
+                <select id="scheduleEmployeeFilter" aria-label="Filtrar por funcionário"><option value="">Todos os funcionários</option></select>
+                <button class="button secondary" id="refreshSchedulesBtn" type="button">Atualizar</button>
+              </div>
+            </div>
+            <div class="employee-table-wrap">
+              <table class="schedule-table">
+                <thead><tr><th>FUNCIONÁRIO</th><th>DIA</th><th>HORÁRIO</th><th>INTERVALO</th><th>VIGÊNCIA</th><th>AÇÕES</th></tr></thead>
+                <tbody id="scheduleRows"><tr><td colspan="6" class="table-empty">Carregando...</td></tr></tbody>
               </table>
             </div>
           </section>
