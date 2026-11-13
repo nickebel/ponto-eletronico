@@ -78,7 +78,7 @@ async function makePasswordHash(password, pepper) {
   const bits = await crypto.subtle.deriveBits(
     { name: "PBKDF2", salt, iterations: ITERATIONS, hash: "SHA-256" }, material, 256
   );
-  return `pbkdf2-sha256-hmac-pepper-v1${ITERATIONS}${toBase64(salt)}${toBase64(new Uint8Array(bits))}`;
+  return "pbkdf2-sha256-hmac-pepper-v1$" + ITERATIONS + "$" + toBase64(salt) + "$" + toBase64(new Uint8Array(bits));
 }
 async function checkPassword(password, stored, pepper) {
   try {
