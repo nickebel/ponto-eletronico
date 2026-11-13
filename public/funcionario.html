@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f6fb">
+  <meta name="description" content="Portal do funcionário — Orbe Ponto.">
+  <title>Meu Ponto — Orbe</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/styles.css">
+</head>
+<body class="employee-portal-body">
+  <div class="demo-bar"><span></span> AMBIENTE DE DESENVOLVIMENTO · NÃO É REGISTRO OFICIAL</div>
+  <main class="employee-portal-shell">
+    <header class="employee-portal-header">
+      <a class="auth-brand" href="./"><span class="brand-icon">◷</span><span><b>orbe</b><small>PONTO & JORNADA</small></span></a>
+      <a href="./" class="employee-admin-link">Acesso administrativo</a>
+    </header>
+
+    <section class="employee-portal-auth" id="employeePortalAuth">
+      <div class="employee-portal-card">
+        <p class="auth-eyebrow">PORTAL DO FUNCIONÁRIO</p>
+        <h1>Seu ponto, no seu celular.</h1>
+        <p class="auth-intro">Entre com o código da empresa, sua matrícula e a senha fornecida pelo administrador.</p>
+        <div class="auth-alert" id="employeeLoginAlert" role="alert" aria-live="polite" hidden></div>
+        <form id="employeeLoginForm">
+          <label for="employeeOrganizationCode">Código da empresa</label>
+          <input id="employeeOrganizationCode" name="organizationCode" type="text" inputmode="text" minlength="10" maxlength="10" autocomplete="organization" autocapitalize="characters" required placeholder="Ex.: A1B2C3D4E5">
+          <label for="employeeLoginCode">Matrícula</label>
+          <input id="employeeLoginCode" name="employeeCode" type="text" maxlength="30" autocomplete="username" required placeholder="Sua matrícula">
+          <label for="employeeLoginPassword">Senha</label>
+          <input id="employeeLoginPassword" name="password" type="password" maxlength="128" autocomplete="current-password" required placeholder="Senha temporária ou pessoal">
+          <button class="auth-submit" id="employeeLoginSubmit" type="submit">Entrar no meu ponto</button>
+        </form>
+        <div class="auth-footnote"><span class="secure-dot"></span> Acesso individual e conexão HTTPS</div>
+        <p class="auth-legal">Use somente sua própria conta. As marcações desta versão são de desenvolvimento e ainda não substituem um sistema REP-P regularizado.</p>
+      </div>
+    </section>
+
+    <section class="employee-portal-app" id="employeePortalApp" hidden>
+      <div class="employee-welcome">
+        <div>
+          <p class="auth-eyebrow" id="employeePortalCompany">PORTAL DO FUNCIONÁRIO</p>
+          <h1>Olá, <span id="employeePortalName">Funcionário</span> 👋</h1>
+          <p id="employeePortalMeta">Suas marcações ficam vinculadas à sua conta.</p>
+        </div>
+        <button class="logout-button" id="employeeLogoutBtn" type="button">Sair</button>
+      </div>
+
+      <section class="employee-force-password" id="employeeForcePassword" hidden>
+        <div class="panel">
+          <div class="panel-head"><div><h2>Crie sua senha pessoal</h2><p>Por segurança, altere a senha temporária antes de registrar o ponto.</p></div></div>
+          <form id="employeeChangePasswordForm" class="employee-change-password-form">
+            <label for="employeeCurrentPassword">Senha temporária atual</label>
+            <input id="employeeCurrentPassword" type="password" autocomplete="current-password" minlength="12" maxlength="128" required>
+            <label for="employeeNewPassword">Nova senha</label>
+            <input id="employeeNewPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" required>
+            <label for="employeeConfirmPassword">Confirme a nova senha</label>
+            <input id="employeeConfirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" required>
+            <div class="auth-alert" id="employeePasswordAlert" role="alert" aria-live="polite" hidden></div>
+            <button class="auth-submit" id="employeeChangePasswordSubmit" type="submit">Salvar minha senha</button>
+          </form>
+        </div>
+      </section>
+
+      <div id="employeePunchContent">
+        <section class="employee-punch-card">
+          <div class="employee-punch-card-head">
+            <div><p class="auth-eyebrow">MARCAÇÃO DE JORNADA</p><h2>O que você vai registrar?</h2><p>Toque no tipo correspondente ao horário que está acontecendo agora.</p></div>
+            <span class="employee-online-indicator"><i></i> Online</span>
+          </div>
+          <div class="employee-punch-grid">
+            <button class="employee-punch-button" type="button" data-record-type="entry"><span class="punch-symbol">↗</span><span><b>Entrada</b><small>Início do trabalho</small></span></button>
+            <button class="employee-punch-button" type="button" data-record-type="break_start"><span class="punch-symbol">Ⅱ</span><span><b>Início do intervalo</b><small>Saída para intervalo</small></span></button>
+            <button class="employee-punch-button" type="button" data-record-type="break_end"><span class="punch-symbol">▶</span><span><b>Retorno do intervalo</b><small>Volta ao trabalho</small></span></button>
+            <button class="employee-punch-button" type="button" data-record-type="exit"><span class="punch-symbol">↙</span><span><b>Saída</b><small>Fim do trabalho</small></span></button>
+          </div>
+          <p class="employee-punch-footnote">A marcação registra o tipo escolhido e o horário recebido pelo servidor. Confira os dados antes de tocar.</p>
+          <div class="employee-punch-feedback" id="employeePunchFeedback" role="status" aria-live="polite" hidden></div>
+        </section>
+
+        <section class="employee-history-card">
+          <div class="employee-history-head"><div><p class="auth-eyebrow">SEU HISTÓRICO</p><h2>Últimas marcações</h2><p>Somente você pode consultar este histórico nesta tela.</p></div><button class="button secondary" id="employeeRefreshRecordsBtn" type="button">Atualizar</button></div>
+          <div class="employee-history-list" id="employeeHistoryList"><div class="employee-history-empty">Carregando seu histórico...</div></div>
+        </section>
+      </div>
+
+      <footer class="employee-portal-footer">
+        <span>Orbe Ponto · Portal individual</span>
+        <span>Adicione esta página à tela inicial do celular para acesso rápido.</span>
+      </footer>
+    </section>
+  </main>
+  <div class="toast" id="employeeToast" role="status" aria-live="polite"></div>
+  <script src="./assets/config.js"></script>
+  <script src="./assets/employee.js" defer></script>
+</body>
+</html>
