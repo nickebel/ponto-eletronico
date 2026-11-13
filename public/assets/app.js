@@ -175,6 +175,14 @@ function escapeHtml(value) {
   })[character]);
 }
 
+function localDateValue() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return year + "-" + month + "-" + day;
+}
+
 function displayDate(value) {
   if (!value) return "—";
   const parts = String(value).split("-");
@@ -420,7 +428,9 @@ function openScheduleForm(schedule) {
     $("#scheduleEffectiveFrom").value = schedule.effective_from;
     $("#scheduleEffectiveUntil").value = schedule.effective_until || "";
   } else {
-    $("#scheduleEffectiveFrom").value = new Date().toLocaleDateString("en-CA");
+    $("#scheduleEffectiveFrom").value = localDateValue();
+    const firstActive = scheduleEmployees.find(employee => employee.status === "active") || scheduleEmployees[0];
+    if (firstActive) $("#scheduleEmployee").value = firstActive.id;
     $("#scheduleWeekday").value = "1";
   }
   $("#scheduleFormPanel").hidden = false;
