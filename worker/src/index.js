@@ -19,7 +19,7 @@ function headers(origin) {
   };
   if (origin && ALLOWED_ORIGINS.has(origin)) {
     h["Access-Control-Allow-Origin"] = origin;
-    h["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS";
+    h["Access-Control-Allow-Methods"] = "GET, POST, PUT, OPTIONS";
     h["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Bootstrap-Key";
     h["Access-Control-Max-Age"] = "86400";
   }
