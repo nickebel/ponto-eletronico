@@ -21,7 +21,10 @@ async function apiRequest(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}/api/${path}`, { ...options, headers, cache: "no-store" });
   let data = {};
   try { data = await response.json(); } catch {}
-  if (!response.ok) throw new Error(data.error || `Falha na comunicação (HTTP ${response.status}).`);
+  if (!response.ok) {
+    const stage = data.stage ? ` (etapa: ${data.stage})` : "";
+    throw new Error((data.error || `Falha na comunicação (HTTP ${response.status}).`) + stage);
+  }
   return data;
 }
 
