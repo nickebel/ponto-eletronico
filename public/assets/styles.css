@@ -59,3 +59,21 @@
 .danger-action{color:#a85a4b;border-color:#f0ddda}
 @media(max-width:900px){.employee-toolbar{align-items:flex-start;flex-direction:column}.employee-filters{width:100%}.employee-filters input{flex:1;width:auto}}
 @media(max-width:520px){.employee-form-grid{grid-template-columns:1fr}.employee-filters{flex-wrap:wrap}.employee-filters input{flex-basis:100%}.employee-filters select{flex:1}.employee-toolbar{padding:14px}.employee-form-panel{padding:14px}}
+
+
+.schedule-form-panel{padding:18px;margin-bottom:16px}
+.schedule-form-panel .panel-head{padding:0 0 14px}
+.schedule-form{border-top:1px solid #eef1f5;padding-top:15px}
+.schedule-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px 16px}
+.schedule-form-grid>div{display:flex;flex-direction:column;gap:6px}
+.schedule-form label{font-size:10px;font-weight:700;color:#536178}
+.schedule-form input,.schedule-form select,.schedule-list-panel select{height:38px;min-width:0;padding:0 10px;border:1px solid #dfe5ee;border-radius:7px;background:#fbfcfe;color:#25344b;font:11px 'DM Sans',sans-serif;outline:none}
+.schedule-form input:focus,.schedule-form select:focus,.schedule-list-panel select:focus{border-color:#6e8bdb;box-shadow:0 0 0 3px #6e8bdb20}
+.schedule-form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.schedule-list-panel{padding:0;overflow:hidden}
+.schedule-table{min-width:830px}
+.schedule-table td,.schedule-table th{padding:12px 13px}
+.schedule-table td:first-child{min-width:175px}
+.schedule-table td:nth-child(3){font-weight:600;color:#3f5069}
+@media(max-width:900px){.schedule-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.schedule-form-grid{grid-template-columns:1fr}.schedule-form-panel{padding:14px}.schedule-form-actions{flex-wrap:wrap}.schedule-form-actions button{flex:1}.schedule-list-panel .employee-toolbar{padding:14px}}
