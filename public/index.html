@@ -99,7 +99,45 @@
           </div>
         </section>
 
-        <section class="view" id="view-employees"><div class="heading"><div><p class="eyebrow">GERENCIAMENTO</p><h1>Funcionários</h1><p>Gerenciamento da equipe da empresa.</p></div></div><div class="notice"><b>ⓘ</b><div><strong>Próxima etapa: cadastro de funcionários</strong><p>A autenticação está habilitada. O módulo de cadastro será implementado a seguir.</p></div></div><div class="panel empty"><span>♙</span><h2>Área de funcionários</h2><p>Aqui ficarão cadastro, vínculo, jornada contratual, status e permissões.</p></div></section>
+        <section class="view" id="view-employees">
+          <div class="heading">
+            <div><p class="eyebrow">GERENCIAMENTO</p><h1>Funcionários</h1><p>Cadastro e manutenção dos vínculos da empresa.</p></div>
+            <button class="button primary-button" id="addEmployeeBtn" type="button">＋ Novo funcionário</button>
+          </div>
+          <div class="notice"><b>ⓘ</b><div><strong>Cadastro administrativo em desenvolvimento</strong><p>Esta etapa não solicita CPF nem habilita registros oficiais de jornada. Utilize dados fictícios nos testes.</p></div></div>
+
+          <section class="panel employee-form-panel" id="employeeFormPanel" hidden>
+            <div class="panel-head"><div><h2 id="employeeFormTitle">Novo funcionário</h2><p>Preencha os dados básicos do cadastro.</p></div></div>
+            <form id="employeeForm" class="employee-form">
+              <div class="employee-form-grid">
+                <div><label for="employeeCode">Matrícula *</label><input id="employeeCode" name="employeeCode" maxlength="30" required placeholder="Ex.: 001"></div>
+                <div><label for="employeeFullName">Nome completo *</label><input id="employeeFullName" name="fullName" maxlength="120" required placeholder="Nome do funcionário"></div>
+                <div><label for="employeeJobTitle">Cargo</label><input id="employeeJobTitle" name="jobTitle" maxlength="120" placeholder="Ex.: Atendente"></div>
+                <div><label for="employeeHiredOn">Data de admissão</label><input id="employeeHiredOn" name="hiredOn" type="date"></div>
+                <div><label for="employeeStatus">Situação</label><select id="employeeStatus" name="status"><option value="active">Ativo</option><option value="inactive">Inativo</option></select></div>
+                <div><label for="employeeTerminatedOn">Data de desligamento</label><input id="employeeTerminatedOn" name="terminatedOn" type="date"></div>
+              </div>
+              <div class="employee-form-actions"><button class="button secondary" id="cancelEmployeeBtn" type="button">Cancelar</button><button class="button primary-button" id="saveEmployeeBtn" type="submit">Salvar funcionário</button></div>
+            </form>
+          </section>
+
+          <section class="panel employee-list-panel">
+            <div class="employee-toolbar">
+              <div><h2>Equipe cadastrada</h2><p id="employeeSummary">Carregando funcionários...</p></div>
+              <div class="employee-filters">
+                <input id="employeeSearch" type="search" placeholder="Buscar por nome ou matrícula" aria-label="Buscar funcionários">
+                <select id="employeeStatusFilter" aria-label="Filtrar situação"><option value="active">Ativos</option><option value="inactive">Inativos</option><option value="all">Todos</option></select>
+                <button class="button secondary" id="refreshEmployeesBtn" type="button">Atualizar</button>
+              </div>
+            </div>
+            <div class="employee-table-wrap">
+              <table class="employee-table">
+                <thead><tr><th>FUNCIONÁRIO</th><th>MATRÍCULA</th><th>ADMISSÃO</th><th>SITUAÇÃO</th><th>AÇÕES</th></tr></thead>
+                <tbody id="employeeRows"><tr><td colspan="5" class="table-empty">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
 
         <section class="view" id="view-records"><div class="heading"><div><p class="eyebrow">JORNADA</p><h1>Registros de ponto</h1><p>Fluxo de marcações planejado.</p></div></div><div class="notice warning"><b>⚠</b><div><strong>Registro oficial desabilitado</strong><p>Coletor, relógio confiável, NSR, integridade e comprovantes ainda não foram implementados.</p></div></div><div class="panel empty"><span>◷</span><h2>Coletor de marcações</h2><p>Será desenvolvido após o desenho técnico e a validação dos requisitos aplicáveis ao REP-P.</p></div></section>
 
