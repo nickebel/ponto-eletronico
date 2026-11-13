@@ -93,3 +93,84 @@
 .demo-record-table td:first-child{min-width:185px}
 .demo-record-list-panel{padding:0;overflow:hidden}
 @media(max-width:520px){.demo-record-grid{grid-template-columns:1fr}.demo-record-form-panel{padding:14px}.demo-record-actions button{width:100%}}
+
+
+.employee-login-link{display:block;text-align:center;margin:17px 0 0;color:#345da9;text-decoration:none;font-size:11px;font-weight:700}
+.employee-login-link:hover{text-decoration:underline}
+.employee-access-code-panel,.employee-credential-panel{padding:18px;margin-bottom:16px}
+.employee-access-code-panel{display:flex;align-items:center;justify-content:space-between;gap:18px}
+.employee-access-code-panel h2,.employee-credential-panel h2{font:700 14px Manrope,sans-serif;color:#27354a;margin:0}
+.employee-access-code-panel p:not(.eyebrow){font-size:10px;color:#8c98a8;margin:5px 0 0;line-height:1.5}
+.employee-access-code-value,.credential-copy-row{display:flex;align-items:center;gap:8px}
+.employee-access-code-value code{padding:10px 13px;border:1px dashed #cbd6e9;border-radius:7px;background:#f6f8fc;color:#263d69;font-size:16px;font-weight:800;letter-spacing:2px}
+.employee-credential-panel label{display:block;font-size:10px;font-weight:700;color:#536178;margin-bottom:6px}
+.employee-credential-panel .panel-head{padding:0 0 13px}
+.employee-credential-panel input{height:39px;min-width:0;flex:1;padding:0 11px;border:1px solid #dfe5ee;border-radius:7px;background:#f7f9fd;color:#243b67;font:700 14px 'DM Sans',sans-serif;letter-spacing:1px}
+.employee-credential-panel .field-hint{margin-top:9px}
+.access-action{color:#345da9;border-color:#cdd9f3;background:#f7f9ff}
+.employee-records-list-panel{padding:0;overflow:hidden}
+.employee-records-list-panel .demo-record-table{min-width:700px}
+@media(max-width:700px){.employee-access-code-panel{align-items:flex-start;flex-direction:column}.employee-access-code-value{width:100%;flex-wrap:wrap}.employee-access-code-value code{flex:1;text-align:center}.credential-copy-row{align-items:stretch;flex-direction:column}.employee-credential-panel input{width:100%}}
+
+.employee-portal-body{min-height:100vh;background:#f4f6fb}
+.employee-portal-shell{width:min(100% - 28px,760px);margin:0 auto;padding:20px 0 36px}
+.employee-portal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
+.employee-portal-header .auth-brand{margin:0}
+.employee-admin-link{color:#5874b6;text-decoration:none;font-size:10px;font-weight:700}
+.employee-portal-auth{display:grid;place-items:center;min-height:calc(100vh - 150px)}
+.employee-portal-card{width:min(100%,440px);padding:30px;background:#fff;border:1px solid #e6ebf2;border-radius:16px;box-shadow:0 18px 50px rgba(25,42,70,.08)}
+.employee-portal-card h1,.employee-welcome h1{font:800 26px Manrope,sans-serif;letter-spacing:-1px;color:#1e2c42;margin:0 0 8px}
+.employee-portal-card .auth-intro{margin-bottom:22px}
+.employee-portal-card form{display:flex;flex-direction:column;gap:8px}
+.employee-portal-card label,.employee-change-password-form label{font-size:10px;font-weight:700;color:#536178;margin-top:6px}
+.employee-portal-card input,.employee-change-password-form input{height:43px;width:100%;padding:0 12px;border:1px solid #dfe5ee;border-radius:8px;background:#fbfcfe;color:#25344b;font:12px 'DM Sans',sans-serif;outline:none}
+.employee-portal-card input:focus,.employee-change-password-form input:focus{border-color:#6e8bdb;box-shadow:0 0 0 3px #6e8bdb20}
+.employee-portal-app{display:block}
+.employee-welcome{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin:14px 0 23px}
+.employee-welcome h1 span{color:#345da9}
+.employee-welcome p:not(.auth-eyebrow){font-size:11px;color:#8793a4;margin:5px 0 0}
+.employee-welcome .auth-eyebrow{margin-bottom:8px}
+.employee-force-password{margin-bottom:18px}
+.employee-force-password .panel{padding:20px}
+.employee-change-password-form{display:flex;flex-direction:column;gap:7px}
+.employee-change-password-form .auth-submit{width:100%}
+.employee-punch-card,.employee-history-card{background:#fff;border:1px solid #e5eaf2;border-radius:14px;box-shadow:0 10px 28px rgba(25,42,70,.045);padding:22px;margin-bottom:16px}
+.employee-punch-card-head,.employee-history-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:18px}
+.employee-punch-card h2,.employee-history-head h2{font:700 17px Manrope,sans-serif;color:#26354b;margin:0}
+.employee-punch-card-head p:not(.auth-eyebrow),.employee-history-head p:not(.auth-eyebrow){font-size:10px;line-height:1.5;color:#8c98a8;margin:6px 0 0}
+.employee-punch-card-head .auth-eyebrow,.employee-history-head .auth-eyebrow{margin-bottom:7px}
+.employee-online-indicator{display:inline-flex;align-items:center;gap:6px;padding:6px 8px;border-radius:20px;background:#edf8f3;color:#288363;font-size:9px;font-weight:700;white-space:nowrap}
+.employee-online-indicator i{width:6px;height:6px;border-radius:50%;background:#32a77d}
+.employee-punch-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.employee-punch-button{display:flex;align-items:center;gap:12px;min-height:76px;padding:14px;border:1px solid #e1e7f1;border-radius:10px;background:#fbfcff;color:#26354b;text-align:left;cursor:pointer;transition:border-color .15s,background .15s,transform .15s}
+.employee-punch-button:hover{border-color:#aebfe7;background:#f5f8ff;transform:translateY(-1px)}
+.employee-punch-button:disabled{opacity:.58;cursor:wait;transform:none}
+.punch-symbol{width:38px;height:38px;flex:0 0 38px;display:grid;place-items:center;border-radius:10px;background:#eaf0ff;color:#345da9;font-size:19px;font-weight:700}
+.employee-punch-button span:last-child{display:flex;flex-direction:column;gap:4px}
+.employee-punch-button b{font-size:11px}
+.employee-punch-button small{font-size:9px;color:#929eae}
+.employee-punch-footnote{font-size:9px;line-height:1.5;color:#929eae;margin:14px 0 0}
+.employee-punch-feedback{margin-top:13px;padding:11px 13px;border-radius:8px;background:#eef8f3;border:1px solid #d5eee2;color:#267856;font-size:10px;line-height:1.5}
+.employee-history-head{align-items:center}
+.employee-history-list{display:flex;flex-direction:column}
+.employee-history-item{display:flex;align-items:center;gap:11px;padding:13px 0;border-top:1px solid #f0f2f6}
+.employee-history-icon{width:32px;height:32px;display:grid;place-items:center;border-radius:9px;background:#f0f4fc;color:#4567ad;font-size:15px;font-weight:700}
+.employee-history-item>div{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0}
+.employee-history-item b{font-size:10px;color:#3b4b61}
+.employee-history-item small{font-size:9px;color:#929eae;line-height:1.4}
+.employee-history-source{font-size:8px;color:#378b6b;font-weight:700}
+.employee-history-empty{text-align:center;padding:28px 12px;color:#929eae;font-size:10px}
+.employee-portal-footer{display:flex;justify-content:space-between;gap:12px;color:#9aa5b4;font-size:8px;padding:8px 3px}
+@media(max-width:520px){
+ .employee-portal-shell{width:min(100% - 20px,760px);padding-top:14px}
+ .employee-portal-header{margin-bottom:18px}
+ .employee-portal-card{padding:24px 20px}
+ .employee-portal-card h1,.employee-welcome h1{font-size:23px}
+ .employee-punch-card,.employee-history-card{padding:17px;border-radius:12px}
+ .employee-punch-grid{grid-template-columns:1fr}
+ .employee-punch-button{min-height:68px}
+ .employee-punch-card-head{gap:8px}
+ .employee-online-indicator{font-size:8px}
+ .employee-history-head{align-items:flex-start}
+ .employee-portal-footer{flex-direction:column}
+}

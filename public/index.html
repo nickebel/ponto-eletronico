@@ -50,6 +50,7 @@
         <input id="loginPassword" name="password" type="password" maxlength="128" autocomplete="current-password" required>
         <button class="auth-submit" id="loginSubmit" type="submit">Entrar no sistema</button>
       </form>
+      <a class="employee-login-link" href="./funcionario.html">Sou funcionário · registrar meu ponto →</a>
 
       <div class="auth-footnote"><span class="secure-dot"></span> Conexão HTTPS · Acesso administrativo</div>
       <p class="auth-legal">Versão de desenvolvimento. Não utilizar para controle oficial de jornada antes da validação legal e técnica do REP-P.</p>
@@ -105,7 +106,19 @@
             <div><p class="eyebrow">GERENCIAMENTO</p><h1>Funcionários</h1><p>Cadastro e manutenção dos vínculos da empresa.</p></div>
             <button class="button primary-button" id="addEmployeeBtn" type="button">＋ Novo funcionário</button>
           </div>
-          <div class="notice"><b>ⓘ</b><div><strong>Cadastro administrativo em desenvolvimento</strong><p>Esta etapa não solicita CPF nem habilita registros oficiais de jornada. Utilize dados fictícios nos testes.</p></div></div>
+          <div class="notice"><b>ⓘ</b><div><strong>Cadastro e acesso individual</strong><p>Crie o cadastro do funcionário e gere uma senha temporária para que ele acesse o portal pelo próprio celular. Continue usando dados fictícios durante os testes.</p></div></div>
+
+          <section class="panel employee-access-code-panel">
+            <div><p class="eyebrow">ACESSO DOS FUNCIONÁRIOS</p><h2>Código da empresa</h2><p>O funcionário utilizará este código, sua matrícula e a senha individual para entrar no portal.</p></div>
+            <div class="employee-access-code-value"><code id="companyEmployeeAccessCode">Carregando...</code><button class="button secondary" id="copyCompanyEmployeeAccessCodeBtn" type="button">Copiar código</button></div>
+          </section>
+
+          <section class="panel employee-credential-panel" id="employeeCredentialPanel" hidden>
+            <div class="panel-head"><div><h2>Senha temporária gerada</h2><p id="employeeCredentialName">Compartilhe esta senha diretamente com o funcionário.</p></div><span class="demo-tag">EXIBIDA UMA VEZ</span></div>
+            <label for="employeeTemporaryPassword">Senha temporária</label>
+            <div class="credential-copy-row"><input id="employeeTemporaryPassword" type="text" readonly autocomplete="off"><button class="button primary-button" id="copyEmployeeTemporaryPasswordBtn" type="button">Copiar senha</button></div>
+            <p class="field-hint">O funcionário deverá criar uma senha própria no primeiro acesso. Não envie a senha em grupos ou canais públicos.</p>
+          </section>
 
           <section class="panel employee-form-panel" id="employeeFormPanel" hidden>
             <div class="panel-head"><div><h2 id="employeeFormTitle">Novo funcionário</h2><p>Preencha os dados básicos do cadastro.</p></div></div>
@@ -185,32 +198,19 @@
 
         <section class="view" id="view-records">
           <div class="heading">
-            <div><p class="eyebrow">JORNADA</p><h1>Registros de ponto</h1><p>Simulação controlada de marcações para validar o fluxo do sistema.</p></div>
-            <button class="button secondary" id="refreshDemoRecordsBtn" type="button">↻ Atualizar</button>
+            <div><p class="eyebrow">ACOMPANHAMENTO</p><h1>Marcações dos funcionários</h1><p>Histórico enviado pelas contas individuais dos funcionários.</p></div>
+            <button class="button secondary" id="refreshEmployeeRecordsBtn" type="button">↻ Atualizar</button>
           </div>
-          <div class="notice warning">
-            <b>⚠</b>
-            <div><strong>Modo de demonstração — não é registro oficial de ponto</strong><p>As marcações desta tela ficam em uma tabela separada. Não geram NSR oficial, AFD, AEJ, assinatura digital ou comprovante legal. O horário é fornecido pelo servidor e as marcações não podem ser editadas ou excluídas.</p></div>
-          </div>
-          <section class="panel demo-record-form-panel">
-            <div class="panel-head"><div><h2>Registrar marcação de teste</h2><p>Use somente o funcionário fictício durante os testes.</p></div><span class="demo-tag">AMBIENTE DE TESTE</span></div>
-            <form id="demoRecordForm" class="demo-record-form">
-              <div class="demo-record-grid">
-                <div><label for="demoRecordEmployee">Funcionário *</label><select id="demoRecordEmployee" required><option value="">Carregando funcionários...</option></select></div>
-                <div><label for="demoRecordType">Tipo de marcação *</label><select id="demoRecordType" required><option value="entry">Entrada</option><option value="break_start">Início do intervalo</option><option value="break_end">Retorno do intervalo</option><option value="exit">Saída</option></select></div>
-              </div>
-              <div class="demo-record-actions"><button class="button primary-button" id="registerDemoRecordBtn" type="submit">Registrar marcação de teste</button></div>
-            </form>
-          </section>
-          <section class="panel demo-record-list-panel">
+          <div class="notice warning"><b>⚠</b><div><strong>Ambiente de desenvolvimento</strong><p>As marcações são armazenadas com horário do servidor, mas esta versão ainda não implementa todos os requisitos para uso como REP-P oficial. Não utilize estes dados para fechamento legal da folha ou apuração oficial.</p></div></div>
+          <section class="panel employee-records-list-panel">
             <div class="employee-toolbar">
-              <div><h2>Histórico de marcações de teste</h2><p id="demoRecordSummary">Carregando histórico...</p></div>
-              <div class="employee-filters"><select id="demoRecordEmployeeFilter" aria-label="Filtrar por funcionário"><option value="">Todos os funcionários</option></select></div>
+              <div><h2>Histórico recente</h2><p id="employeeRecordsSummary">Carregando marcações...</p></div>
+              <div class="employee-filters"><select id="employeeRecordsFilter" aria-label="Filtrar por funcionário"><option value="">Todos os funcionários</option></select></div>
             </div>
             <div class="employee-table-wrap">
               <table class="demo-record-table">
-                <thead><tr><th>FUNCIONÁRIO</th><th>MARCAÇÃO</th><th>DATA E HORA</th><th>FUSO</th></tr></thead>
-                <tbody id="demoRecordRows"><tr><td colspan="4" class="table-empty">Carregando...</td></tr></tbody>
+                <thead><tr><th>FUNCIONÁRIO</th><th>MARCAÇÃO</th><th>DATA E HORA</th><th>ORIGEM</th></tr></thead>
+                <tbody id="employeeRecordsRows"><tr><td colspan="4" class="table-empty">Carregando...</td></tr></tbody>
               </table>
             </div>
           </section>

@@ -116,19 +116,30 @@ async function getSession(request, db) {
   const now = new Date().toISOString();
   const row = await db.prepare(`
     SELECT s.id AS session_id, u.id AS user_id, u.full_name, u.email_normalized, u.role,
-           o.id AS organization_id, o.legal_name
+           u.password_change_required, o.id AS organization_id, o.legal_name, o.timezone,
+           e.id AS employee_id, e.employee_code, e.full_name AS employee_name,
+           e.job_title AS employee_job_title, e.status AS employee_status
     FROM auth_sessions s
     JOIN users u ON u.id=s.user_id
     JOIN organizations o ON o.id=u.organization_id
+    LEFT JOIN employees e ON e.user_id=u.id AND e.organization_id=u.organization_id
     WHERE s.token_hash=? AND s.expires_at>? AND u.status='active'
+      AND (u.role<>'employee' OR (e.id IS NOT NULL AND e.status='active'))
     LIMIT 1
   `).bind(tokenHash, now).first();
   if (!row) return null;
   await db.prepare("UPDATE auth_sessions SET last_seen_at=? WHERE id=?").bind(now, row.session_id).run();
   return {
     sessionId: row.session_id,
-    user: { id: row.user_id, name: row.full_name, email: row.email_normalized, role: row.role },
-    organization: { id: row.organization_id, name: row.legal_name }
+    user: {
+      id: row.user_id, name: row.full_name, email: row.email_normalized,
+      role: row.role, passwordChangeRequired: Boolean(row.password_change_required)
+    },
+    employee: row.employee_id ? {
+      id: row.employee_id, code: row.employee_code, name: row.employee_name,
+      jobTitle: row.employee_job_title, status: row.employee_status
+    } : null,
+    organization: { id: row.organization_id, name: row.legal_name, timezone: row.timezone || "America/Maceio" }
   };
 }
 async function handleSetupStatus(db, origin) {
@@ -248,13 +259,15 @@ async function handleEmployees(request, env, origin, session, employeeId = null)
     try {
       const status = new URL(request.url).searchParams.get("status") || "active";
       if (!["active", "inactive", "all"].includes(status)) return reply({ error: "Filtro de situação inválido." }, 400, origin);
+      const base = "SELECT e.id,e.employee_code,e.full_name,e.job_title,e.status,e.hired_on,e.terminated_on,e.created_at,e.updated_at,CASE WHEN u.id IS NOT NULL AND u.status='active' THEN 1 ELSE 0 END AS has_access FROM employees e LEFT JOIN users u ON u.id=e.user_id AND u.organization_id=e.organization_id";
       const sql = status === "all"
-        ? "SELECT id, employee_code, full_name, job_title, status, hired_on, terminated_on, created_at, updated_at FROM employees WHERE organization_id=? ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, full_name COLLATE NOCASE"
-        : "SELECT id, employee_code, full_name, job_title, status, hired_on, terminated_on, created_at, updated_at FROM employees WHERE organization_id=? AND status=? ORDER BY full_name COLLATE NOCASE";
+        ? base + " WHERE e.organization_id=? ORDER BY CASE e.status WHEN 'active' THEN 0 ELSE 1 END,e.full_name COLLATE NOCASE"
+        : base + " WHERE e.organization_id=? AND e.status=? ORDER BY e.full_name COLLATE NOCASE";
       const rows = status === "all"
         ? await env.DB.prepare(sql).bind(organizationId).all()
         : await env.DB.prepare(sql).bind(organizationId, status).all();
-      return reply({ employees: rows.results || [] }, 200, origin);
+      const org = await env.DB.prepare("SELECT employee_access_code FROM organizations WHERE id=?").bind(organizationId).first();
+      return reply({ employees: rows.results || [], employeeAccessCode: org?.employee_access_code || null }, 200, origin);
     } catch (error) {
       console.error("List employees failed:", error);
       return reply({ error: "Não foi possível carregar os funcionários." }, 500, origin);
@@ -608,6 +621,265 @@ async function handleLogin(request, env, origin) {
   }
 }
 
+function generateTemporaryPassword() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+  const random = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(random, byte => alphabet[byte % alphabet.length]).join("");
+}
+
+async function handleEmployeeAccessCreation(request, env, origin, session, employeeId) {
+  if (!session) return reply({ error: "Sessão inválida ou expirada." }, 401, origin);
+  if (!canManageEmployees(session)) return reply({ error: "Você não tem permissão para gerenciar acessos." }, 403, origin);
+  if (!env.PASSWORD_PEPPER || env.PASSWORD_PEPPER.length < 32) {
+    return reply({ error: "O segredo PASSWORD_PEPPER não está configurado no Worker." }, 503, origin);
+  }
+
+  try {
+    const employee = await env.DB.prepare(
+      "SELECT id,organization_id,user_id,employee_code,full_name,status FROM employees WHERE id=? AND organization_id=?"
+    ).bind(employeeId, session.organization.id).first();
+    if (!employee) return reply({ error: "Funcionário não encontrado." }, 404, origin);
+    if (employee.status !== "active") return reply({ error: "Ative o funcionário antes de criar um acesso." }, 409, origin);
+
+    let existingUser = null;
+    if (employee.user_id) {
+      existingUser = await env.DB.prepare(
+        "SELECT id,role,status FROM users WHERE id=? AND organization_id=?"
+      ).bind(employee.user_id, session.organization.id).first();
+      if (!existingUser || existingUser.role !== "employee") {
+        return reply({ error: "O vínculo atual da conta não permite criar um acesso de funcionário." }, 409, origin);
+      }
+      if (existingUser.status !== "active") return reply({ error: "A conta está suspensa. Reative-a antes de redefinir a senha." }, 409, origin);
+    }
+
+    const temporaryPassword = generateTemporaryPassword();
+    const passwordHash = await makePasswordHash(temporaryPassword, env.PASSWORD_PEPPER);
+    const now = new Date().toISOString();
+    const userId = existingUser?.id || crypto.randomUUID();
+    const action = existingUser ? "employee.access_password_reset" : "employee.access_created";
+    const statements = [];
+
+    if (existingUser) {
+      statements.push(
+        env.DB.prepare("UPDATE users SET password_hash=?,password_change_required=1,updated_at=? WHERE id=? AND organization_id=?")
+          .bind(passwordHash, now, userId, session.organization.id),
+        env.DB.prepare("DELETE FROM auth_sessions WHERE user_id=?").bind(userId)
+      );
+    } else {
+      const syntheticEmail = "employee-" + employee.id + "@employee.invalid";
+      statements.push(
+        env.DB.prepare("INSERT INTO users (id,organization_id,full_name,email_normalized,password_hash,role,status,password_change_required,created_at,updated_at) VALUES (?,?,?,?,?,'employee','active',1,?,?)")
+          .bind(userId, session.organization.id, employee.full_name, syntheticEmail, passwordHash, now, now),
+        env.DB.prepare("UPDATE employees SET user_id=?,updated_at=? WHERE id=? AND organization_id=? AND user_id IS NULL")
+          .bind(userId, now, employee.id, session.organization.id)
+      );
+    }
+
+    statements.push(
+      env.DB.prepare("INSERT INTO audit_events (id,organization_id,actor_user_id,subject_type,subject_id,action,metadata_json,occurred_at_utc) VALUES (?,?,?,?,?,?,?,?)")
+        .bind(crypto.randomUUID(), session.organization.id, session.user.id, "employee", employee.id, action, JSON.stringify({ employee_code: employee.employee_code, user_id: userId }), now)
+    );
+    await env.DB.batch(statements);
+
+    const linked = await env.DB.prepare(
+      "SELECT user_id FROM employees WHERE id=? AND organization_id=?"
+    ).bind(employee.id, session.organization.id).first();
+    if (linked?.user_id !== userId) return reply({ error: "Não foi possível concluir o vínculo da conta. Atualize o cadastro e tente novamente." }, 409, origin);
+
+    return reply({
+      success: true,
+      employee: { id: employee.id, employeeCode: employee.employee_code, fullName: employee.full_name },
+      temporaryPassword,
+      passwordChangeRequired: true,
+      reset: Boolean(existingUser)
+    }, existingUser ? 200 : 201, origin);
+  } catch (error) {
+    console.error("Create employee access failed:", error);
+    if (String(error).includes("UNIQUE constraint failed")) {
+      return reply({ error: "Este funcionário já possui um acesso ou existe um conflito de matrícula." }, 409, origin);
+    }
+    return reply({ error: "Não foi possível criar o acesso do funcionário." }, 500, origin);
+  }
+}
+
+async function handleEmployeeLogin(request, env, origin) {
+  if (!env.PASSWORD_PEPPER || env.PASSWORD_PEPPER.length < 32) {
+    return reply({ error: "O segredo PASSWORD_PEPPER não está configurado no Worker." }, 503, origin);
+  }
+  let data;
+  try { data = await bodyJson(request); }
+  catch (error) {
+    return reply({ error: error.message === "REQUEST_TOO_LARGE" ? "Requisição muito grande." : "JSON inválido." }, 400, origin);
+  }
+
+  const organizationCode = String(data.organizationCode || "").trim().toUpperCase();
+  const employeeCode = String(data.employeeCode || "").trim().toUpperCase();
+  const password = String(data.password || "");
+  if (!/^[A-Z0-9]{10}$/.test(organizationCode) || !employeeCode || employeeCode.length > 30 || password.length > 128) {
+    return reply({ error: "Código da empresa, matrícula ou senha inválidos." }, 400, origin);
+  }
+
+  try {
+    const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+    const key = await digest(ip + "|employee|" + organizationCode + "|" + employeeCode);
+    if (await isBlocked(env.DB, key)) {
+      return reply({ error: "Muitas tentativas. Aguarde 15 minutos e tente novamente." }, 429, origin);
+    }
+
+    const org = await env.DB.prepare(
+      "SELECT id,legal_name,timezone FROM organizations WHERE employee_access_code=?"
+    ).bind(organizationCode).first();
+
+    const user = org ? await env.DB.prepare(
+      "SELECT u.id,u.full_name,u.password_hash,u.password_change_required,e.id AS employee_id,e.employee_code,e.full_name AS employee_name,e.job_title " +
+      "FROM employees e JOIN users u ON u.id=e.user_id AND u.organization_id=e.organization_id " +
+      "WHERE e.organization_id=? AND upper(e.employee_code)=? AND e.status='active' AND u.role='employee' AND u.status='active' LIMIT 1"
+    ).bind(org.id, employeeCode).first() : null;
+
+    const valid = await checkPassword(password, user?.password_hash || DUMMY_HASH, env.PASSWORD_PEPPER);
+    if (!org || !user || !valid) {
+      await recordFailedLogin(env.DB, key);
+      return reply({ error: "Dados de acesso incorretos. Confira o código da empresa, matrícula e senha." }, 401, origin);
+    }
+
+    await env.DB.prepare("DELETE FROM login_attempts WHERE bucket_hash=?").bind(key).run();
+    const session = await createSession(env.DB, user.id);
+    return reply({
+      success: true,
+      token: session.token,
+      expiresAt: session.expiresAt,
+      passwordChangeRequired: Boolean(user.password_change_required),
+      employee: {
+        id: user.employee_id, code: user.employee_code,
+        name: user.employee_name, jobTitle: user.job_title
+      },
+      organization: { id: org.id, name: org.legal_name, timezone: org.timezone || "America/Maceio" }
+    }, 200, origin);
+  } catch (error) {
+    console.error("Employee login failed:", error);
+    return reply({ error: "Não foi possível entrar. Tente novamente." }, 503, origin);
+  }
+}
+
+async function handleEmployeePasswordChange(request, env, origin, session) {
+  if (!session) return reply({ error: "Sessão inválida ou expirada." }, 401, origin);
+  if (session.user.role !== "employee" || !session.employee) {
+    return reply({ error: "Esta operação é exclusiva da conta do funcionário." }, 403, origin);
+  }
+  if (!env.PASSWORD_PEPPER || env.PASSWORD_PEPPER.length < 32) {
+    return reply({ error: "O segredo PASSWORD_PEPPER não está configurado no Worker." }, 503, origin);
+  }
+
+  let data;
+  try { data = await bodyJson(request); }
+  catch (error) {
+    return reply({ error: error.message === "REQUEST_TOO_LARGE" ? "Requisição muito grande." : "JSON inválido." }, 400, origin);
+  }
+
+  const currentPassword = String(data.currentPassword || "");
+  const newPassword = String(data.newPassword || "");
+  if (newPassword.length < 12 || newPassword.length > 128) {
+    return reply({ error: "A nova senha precisa ter entre 12 e 128 caracteres." }, 400, origin);
+  }
+  if (newPassword === currentPassword) {
+    return reply({ error: "Escolha uma senha diferente da senha temporária." }, 400, origin);
+  }
+
+  try {
+    const user = await env.DB.prepare(
+      "SELECT password_hash FROM users WHERE id=? AND organization_id=? AND role='employee' AND status='active'"
+    ).bind(session.user.id, session.organization.id).first();
+    if (!user || !(await checkPassword(currentPassword, user.password_hash, env.PASSWORD_PEPPER))) {
+      return reply({ error: "A senha atual está incorreta." }, 401, origin);
+    }
+
+    const now = new Date().toISOString();
+    const passwordHash = await makePasswordHash(newPassword, env.PASSWORD_PEPPER);
+    await env.DB.batch([
+      env.DB.prepare("UPDATE users SET password_hash=?,password_change_required=0,updated_at=? WHERE id=? AND organization_id=?")
+        .bind(passwordHash, now, session.user.id, session.organization.id),
+      env.DB.prepare("INSERT INTO audit_events (id,organization_id,actor_user_id,subject_type,subject_id,action,metadata_json,occurred_at_utc) VALUES (?,?,?,?,?,?,?,?)")
+        .bind(crypto.randomUUID(), session.organization.id, session.user.id, "employee", session.employee.id, "employee.password_changed", JSON.stringify({ employee_code: session.employee.code }), now)
+    ]);
+    return reply({ success: true, passwordChangeRequired: false }, 200, origin);
+  } catch (error) {
+    console.error("Employee password change failed:", error);
+    return reply({ error: "Não foi possível alterar a senha. Tente novamente." }, 500, origin);
+  }
+}
+
+async function handleEmployeeRecords(request, env, origin, session) {
+  if (!session) return reply({ error: "Sessão inválida ou expirada." }, 401, origin);
+  if (session.user.role !== "employee" || !session.employee) {
+    return reply({ error: "Esta área é exclusiva do funcionário." }, 403, origin);
+  }
+
+  const organizationId = session.organization.id;
+  const employeeId = session.employee.id;
+  const userId = session.user.id;
+
+  try {
+    if (request.method === "GET") {
+      const rows = await env.DB.prepare(
+        "SELECT id,record_type,recorded_at_utc,timezone,source,created_at FROM employee_time_records " +
+        "WHERE organization_id=? AND employee_id=? AND user_id=? ORDER BY recorded_at_utc DESC LIMIT 100"
+      ).bind(organizationId, employeeId, userId).all();
+      return reply({ records: rows.results || [], timezone: session.organization.timezone }, 200, origin);
+    }
+
+    if (request.method !== "POST") return reply({ error: "Método não permitido." }, 405, origin);
+    let data;
+    try { data = await bodyJson(request); }
+    catch (error) {
+      return reply({ error: error.message === "REQUEST_TOO_LARGE" ? "Requisição muito grande." : "JSON inválido." }, 400, origin);
+    }
+
+    const recordType = String(data.recordType || "").trim();
+    const validTypes = ["entry", "break_start", "break_end", "exit"];
+    if (!validTypes.includes(recordType)) return reply({ error: "Tipo de marcação inválido." }, 400, origin);
+
+    // Marcações não são bloqueadas por uma sequência predefinida: cada toque válido é registrado.
+    const now = new Date().toISOString();
+    const id = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO employee_time_records (id,organization_id,employee_id,user_id,record_type,recorded_at_utc,timezone,source,created_at) VALUES (?,?,?,?,?,?,?,'online',?)")
+        .bind(id, organizationId, employeeId, userId, recordType, now, session.organization.timezone, now),
+      env.DB.prepare("INSERT INTO audit_events (id,organization_id,actor_user_id,subject_type,subject_id,action,metadata_json,occurred_at_utc) VALUES (?,?,?,?,?,?,?,?)")
+        .bind(crypto.randomUUID(), organizationId, userId, "employee_time_record", id, "employee_time_record.created", JSON.stringify({ employee_id: employeeId, record_type: recordType, source: "online" }), now)
+    ]);
+
+    const created = await env.DB.prepare(
+      "SELECT id,record_type,recorded_at_utc,timezone,source,created_at FROM employee_time_records WHERE id=? AND organization_id=? AND employee_id=? AND user_id=?"
+    ).bind(id, organizationId, employeeId, userId).first();
+    return reply({ success: true, record: created }, 201, origin);
+  } catch (error) {
+    console.error("Employee time record failed:", error);
+    return reply({ error: "Não foi possível registrar a marcação. Tente novamente." }, 500, origin);
+  }
+}
+
+async function handleAdminEmployeeRecords(request, env, origin, session) {
+  if (!session) return reply({ error: "Sessão inválida ou expirada." }, 401, origin);
+  if (!canManageEmployees(session)) return reply({ error: "Você não tem permissão para consultar as marcações." }, 403, origin);
+  if (request.method !== "GET") return reply({ error: "Método não permitido." }, 405, origin);
+
+  try {
+    const employeeId = new URL(request.url).searchParams.get("employeeId");
+    const base = "SELECT r.id,r.employee_id,r.user_id,r.record_type,r.recorded_at_utc,r.timezone,r.source,e.employee_code,e.full_name AS employee_name " +
+      "FROM employee_time_records r JOIN employees e ON e.id=r.employee_id AND e.organization_id=r.organization_id WHERE r.organization_id=?";
+    const query = employeeId
+      ? base + " AND r.employee_id=? ORDER BY r.recorded_at_utc DESC LIMIT 300"
+      : base + " ORDER BY r.recorded_at_utc DESC LIMIT 300";
+    const rows = employeeId
+      ? await env.DB.prepare(query).bind(session.organization.id, employeeId).all()
+      : await env.DB.prepare(query).bind(session.organization.id).all();
+    return reply({ records: rows.results || [] }, 200, origin);
+  } catch (error) {
+    console.error("Admin employee records failed:", error);
+    return reply({ error: "Não foi possível carregar as marcações dos funcionários." }, 500, origin);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -634,6 +906,36 @@ export default {
       if (url.pathname === "/api/setup/status" && request.method === "GET") return await handleSetupStatus(env.DB, origin);
       if (url.pathname === "/api/setup" && request.method === "POST") return await handleSetup(request, env, origin);
       if (url.pathname === "/api/auth/login" && request.method === "POST") return await handleLogin(request, env, origin);
+      if (url.pathname === "/api/employee/auth/login" && request.method === "POST") return await handleEmployeeLogin(request, env, origin);
+
+      if (url.pathname === "/api/employee/me" && request.method === "GET") {
+        const session = await getSession(request, env.DB);
+        if (!session) return reply({ error: "Sessão inválida ou expirada." }, 401, origin);
+        if (session.user.role !== "employee" || !session.employee) return reply({ error: "Esta área é exclusiva do funcionário." }, 403, origin);
+        return reply({
+          employee: session.employee,
+          organization: session.organization,
+          passwordChangeRequired: session.user.passwordChangeRequired
+        }, 200, origin);
+      }
+      if (url.pathname === "/api/employee/auth/change-password" && request.method === "POST") {
+        const session = await getSession(request, env.DB);
+        return await handleEmployeePasswordChange(request, env, origin, session);
+      }
+      if (url.pathname === "/api/employee/records" && ["GET", "POST"].includes(request.method)) {
+        const session = await getSession(request, env.DB);
+        return await handleEmployeeRecords(request, env, origin, session);
+      }
+      if (url.pathname === "/api/employee-records" && request.method === "GET") {
+        const session = await getSession(request, env.DB);
+        return await handleAdminEmployeeRecords(request, env, origin, session);
+      }
+
+      const employeeAccessMatch = url.pathname.match(/^\/api\/employees\/([0-9a-f-]{36})\/access$/i);
+      if (employeeAccessMatch && request.method === "POST") {
+        const session = await getSession(request, env.DB);
+        return await handleEmployeeAccessCreation(request, env, origin, session, employeeAccessMatch[1]);
+      }
 
       if (url.pathname === "/api/employees" && ["GET", "POST"].includes(request.method)) {
         const session = await getSession(request, env.DB);

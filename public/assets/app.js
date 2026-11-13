@@ -161,7 +161,7 @@ function navigate(view) {
   window.scrollTo({ top: 0, behavior: "smooth" });
   if (view === "employees") loadEmployees();
   if (view === "schedules") loadSchedules();
-  if (view === "records") loadDemoRecords();
+  if (view === "records") loadEmployeeAttendanceRecords();
 }
 $$(".nav-link").forEach(button => button.addEventListener("click", () => navigate(button.dataset.view)));
 $$("[data-go]").forEach(button => button.addEventListener("click", () => navigate(button.dataset.go)));
@@ -230,6 +230,7 @@ function renderEmployees() {
       '<td><span class="status ' + (active ? "working" : "pending") + '">' + (active ? "Ativo" : "Inativo") + '</span></td>' +
       '<td><div class="row-actions">' +
       '<button class="mini-action" type="button" data-action="edit" data-id="' + escapeHtml(employee.id) + '">Editar</button>' +
+      (active ? '<button class="mini-action ' + (employee.has_access ? "" : "access-action") + '" type="button" data-action="access" data-id="' + escapeHtml(employee.id) + '">' + (employee.has_access ? "Redefinir senha" : "Criar acesso") + '</button>' : '') +
       '<button class="mini-action ' + (active ? "danger-action" : "") + '" type="button" data-action="toggle" data-id="' + escapeHtml(employee.id) + '">' + (active ? "Desativar" : "Reativar") + '</button>' +
       '</div></td></tr>';
   }).join("");
@@ -241,6 +242,8 @@ async function loadEmployees() {
   try {
     const result = await apiRequest("employees?status=all");
     employeesCache = Array.isArray(result.employees) ? result.employees : [];
+    $("#companyEmployeeAccessCode").textContent = result.employeeAccessCode || "Não disponível";
+    $("#copyCompanyEmployeeAccessCodeBtn").disabled = !result.employeeAccessCode;
     renderEmployees();
   } catch (error) {
     if (body) body.innerHTML = '<tr><td colspan="5" class="table-empty">' + escapeHtml(error.message) + '</td></tr>';
@@ -312,6 +315,27 @@ $("#employeeRows").addEventListener("click", async event => {
   if (!employee) return;
   if (button.dataset.action === "edit") {
     openEmployeeForm(employee);
+    return;
+  }
+  if (button.dataset.action === "access") {
+    const reset = Boolean(employee.has_access);
+    const promptText = reset
+      ? "Redefinir a senha de acesso de " + employee.full_name + "? A senha anterior deixará de funcionar."
+      : "Criar um acesso individual para " + employee.full_name + "?";
+    if (!window.confirm(promptText)) return;
+    button.disabled = true;
+    try {
+      const result = await apiRequest("employees/" + encodeURIComponent(employee.id) + "/access", { method: "POST" });
+      $("#employeeCredentialName").textContent = result.employee.fullName + " · matrícula " + result.employee.employeeCode;
+      $("#employeeTemporaryPassword").value = result.temporaryPassword;
+      $("#employeeCredentialPanel").hidden = false;
+      $("#employeeCredentialPanel").scrollIntoView({ behavior: "smooth", block: "center" });
+      await loadEmployees();
+      notify(reset ? "Senha temporária redefinida." : "Acesso individual criado.");
+    } catch (error) {
+      notify(error.message);
+      button.disabled = false;
+    }
     return;
   }
   if (button.dataset.action === "toggle") {
@@ -509,38 +533,18 @@ $("#scheduleRows").addEventListener("click", async event => {
 });
 
 
-const demoRecordLabels = {
+
+
+
+const employeeRecordLabels = {
   entry: "Entrada",
   break_start: "Início do intervalo",
   break_end: "Retorno do intervalo",
   exit: "Saída"
 };
-let demoRecordEmployees = [];
-let demoRecordCache = [];
+let employeeAttendanceCache = [];
 
-function fillDemoRecordEmployees() {
-  const formSelect = $("#demoRecordEmployee");
-  const filterSelect = $("#demoRecordEmployeeFilter");
-  const formValue = formSelect.value;
-  const filterValue = filterSelect.value;
-  formSelect.innerHTML = '<option value="">Selecione um funcionário</option>' +
-    demoRecordEmployees.map(employee =>
-      '<option value="' + escapeHtml(employee.id) + '">' +
-      escapeHtml(employee.employee_code + " · " + employee.full_name) +
-      '</option>'
-    ).join("");
-  filterSelect.innerHTML = '<option value="">Todos os funcionários</option>' +
-    demoRecordEmployees.map(employee =>
-      '<option value="' + escapeHtml(employee.id) + '">' +
-      escapeHtml(employee.employee_code + " · " + employee.full_name) +
-      '</option>'
-    ).join("");
-  if (demoRecordEmployees.some(employee => employee.id === formValue)) formSelect.value = formValue;
-  else if (demoRecordEmployees.length) formSelect.value = demoRecordEmployees[0].id;
-  if (demoRecordEmployees.some(employee => employee.id === filterValue)) filterSelect.value = filterValue;
-}
-
-function formatDemoRecordDate(record) {
+function formatServerDateTime(record) {
   try {
     return new Intl.DateTimeFormat("pt-BR", {
       dateStyle: "short",
@@ -552,86 +556,78 @@ function formatDemoRecordDate(record) {
   }
 }
 
-function renderDemoRecords() {
-  const rows = $("#demoRecordRows");
-  const filter = $("#demoRecordEmployeeFilter").value;
-  const visible = demoRecordCache.filter(record => !filter || record.employee_id === filter);
-  $("#demoRecordSummary").textContent = visible.length + (visible.length === 1 ? " marcação de teste" : " marcações de teste") + " · histórico recente";
+function renderEmployeeAttendanceRecords() {
+  const selected = $("#employeeRecordsFilter").value;
+  const visible = employeeAttendanceCache.filter(record => !selected || record.employee_id === selected);
+  $("#employeeRecordsSummary").textContent = visible.length + (visible.length === 1 ? " marcação carregada" : " marcações carregadas") + " · até 300 registros recentes";
+  const rows = $("#employeeRecordsRows");
   if (!visible.length) {
-    rows.innerHTML = '<tr><td colspan="4" class="table-empty">Nenhuma marcação de teste encontrada.</td></tr>';
+    rows.innerHTML = '<tr><td colspan="4" class="table-empty">Nenhuma marcação encontrada.</td></tr>';
     return;
   }
   rows.innerHTML = visible.map(record => {
-    const kind = record.record_type === "break_start" ? "break" : record.record_type === "exit" ? "pending" : "working";
+    const className = record.record_type === "break_start" ? "break" : record.record_type === "exit" ? "pending" : "working";
     return '<tr>' +
       '<td><b>' + escapeHtml(record.employee_name) + '</b><small>' + escapeHtml(record.employee_code) + '</small></td>' +
-      '<td><span class="status ' + kind + '">' + escapeHtml(demoRecordLabels[record.record_type] || record.record_type) + '</span></td>' +
-      '<td><b>' + escapeHtml(formatDemoRecordDate(record)) + '</b></td>' +
-      '<td>' + escapeHtml(record.timezone || "—") + '</td>' +
+      '<td><span class="status ' + className + '">' + escapeHtml(employeeRecordLabels[record.record_type] || record.record_type) + '</span></td>' +
+      '<td><b>' + escapeHtml(formatServerDateTime(record)) + '</b></td>' +
+      '<td>' + escapeHtml(record.source === "online" ? "Celular · online" : record.source) + '</td>' +
       '</tr>';
   }).join("");
 }
 
-async function loadDemoRecords() {
-  const rows = $("#demoRecordRows");
+async function loadEmployeeAttendanceRecords() {
+  const rows = $("#employeeRecordsRows");
   rows.innerHTML = '<tr><td colspan="4" class="table-empty">Carregando marcações...</td></tr>';
   try {
-    const employeesResult = await apiRequest("employees?status=active");
-    demoRecordEmployees = Array.isArray(employeesResult.employees) ? employeesResult.employees : [];
-    fillDemoRecordEmployees();
-    const filter = $("#demoRecordEmployeeFilter").value;
-    const path = filter ? "demo-records?employeeId=" + encodeURIComponent(filter) : "demo-records";
-    const result = await apiRequest(path);
-    demoRecordCache = Array.isArray(result.records) ? result.records : [];
-    renderDemoRecords();
-    $("#registerDemoRecordBtn").disabled = demoRecordEmployees.length === 0;
-    if (!demoRecordEmployees.length) {
-      $("#demoRecordSummary").textContent = "Cadastre ou reative um funcionário para iniciar os testes.";
-      $("#demoRecordEmployee").innerHTML = '<option value="">Nenhum funcionário ativo</option>';
-    }
+    const [recordResult, employeeResult] = await Promise.all([
+      apiRequest("employee-records"),
+      apiRequest("employees?status=all")
+    ]);
+    employeeAttendanceCache = Array.isArray(recordResult.records) ? recordResult.records : [];
+    const select = $("#employeeRecordsFilter");
+    const previous = select.value;
+    const employees = Array.isArray(employeeResult.employees) ? employeeResult.employees : [];
+    select.innerHTML = '<option value="">Todos os funcionários</option>' +
+      employees.map(employee =>
+        '<option value="' + escapeHtml(employee.id) + '">' +
+        escapeHtml(employee.employee_code + " · " + employee.full_name) +
+        '</option>'
+      ).join("");
+    if (employees.some(employee => employee.id === previous)) select.value = previous;
+    renderEmployeeAttendanceRecords();
   } catch (error) {
     rows.innerHTML = '<tr><td colspan="4" class="table-empty">' + escapeHtml(error.message) + '</td></tr>';
-    $("#demoRecordSummary").textContent = "Não foi possível carregar o histórico.";
+    $("#employeeRecordsSummary").textContent = "Não foi possível carregar o histórico.";
     notify(error.message);
   }
 }
 
-$("#demoRecordForm").addEventListener("submit", async event => {
-  event.preventDefault();
-  const button = $("#registerDemoRecordBtn");
-  const payload = {
-    employeeId: $("#demoRecordEmployee").value,
-    recordType: $("#demoRecordType").value
-  };
-  button.disabled = true;
-  button.textContent = "Registrando...";
+$("#employeeRecordsFilter").addEventListener("change", renderEmployeeAttendanceRecords);
+$("#refreshEmployeeRecordsBtn").addEventListener("click", loadEmployeeAttendanceRecords);
+
+$("#copyCompanyEmployeeAccessCodeBtn").addEventListener("click", async () => {
+  const code = $("#companyEmployeeAccessCode").textContent.trim();
+  if (!code || code === "Não disponível" || code === "Carregando...") return;
   try {
-    const result = await apiRequest("demo-records", {
-      method: "POST",
-      body: JSON.stringify(payload)
-    });
-    await loadDemoRecords();
-    $("#demoRecordType").value = "entry";
-    notify("Marcação de teste registrada no horário do servidor.");
-  } catch (error) {
-    notify(error.message);
-  } finally {
-    button.disabled = demoRecordEmployees.length === 0;
-    button.textContent = "Registrar marcação de teste";
+    await navigator.clipboard.writeText(code);
+    notify("Código da empresa copiado.");
+  } catch {
+    notify("Não foi possível copiar automaticamente. Selecione o código para copiá-lo.");
   }
 });
-$("#demoRecordEmployeeFilter").addEventListener("change", async () => {
+
+$("#copyEmployeeTemporaryPasswordBtn").addEventListener("click", async () => {
+  const field = $("#employeeTemporaryPassword");
   try {
-    const filter = $("#demoRecordEmployeeFilter").value;
-    const path = filter ? "demo-records?employeeId=" + encodeURIComponent(filter) : "demo-records";
-    const result = await apiRequest(path);
-    demoRecordCache = Array.isArray(result.records) ? result.records : [];
-    renderDemoRecords();
-  } catch (error) {
-    notify(error.message);
+    await navigator.clipboard.writeText(field.value);
+    notify("Senha temporária copiada.");
+  } catch {
+    field.focus();
+    field.select();
+    notify("Senha selecionada. Copie com Ctrl+C.");
   }
 });
-$("#refreshDemoRecordsBtn").addEventListener("click", loadDemoRecords);
 
 function updateClock() {
   const now = new Date();
