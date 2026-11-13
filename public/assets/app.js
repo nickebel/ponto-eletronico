@@ -544,49 +544,95 @@ const employeeRecordLabels = {
 };
 let employeeAttendanceCache = [];
 
-function formatServerDateTime(record) {
+function recordLocalDate(record) {
+  const date = new Date(record.recorded_at_utc);
+  if (Number.isNaN(date.getTime())) return "";
   try {
-    return new Intl.DateTimeFormat("pt-BR", {
-      dateStyle: "short",
-      timeStyle: "medium",
-      timeZone: record.timezone || "America/Maceio"
-    }).format(new Date(record.recorded_at_utc));
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: record.timezone || "America/Maceio",
+      year: "numeric", month: "2-digit", day: "2-digit"
+    }).formatToParts(date);
+    const values = {};
+    parts.forEach(part => { if (part.type !== "literal") values[part.type] = part.value; });
+    return values.year + "-" + values.month + "-" + values.day;
   } catch {
-    return new Date(record.recorded_at_utc).toLocaleString("pt-BR");
+    return date.toISOString().slice(0, 10);
   }
+}
+
+function formatRecordDate(record) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit", month: "short", year: "numeric",
+    timeZone: record.timezone || "America/Maceio"
+  }).format(new Date(record.recorded_at_utc)).replace(/\\./g, "");
+}
+
+function formatRecordTime(record) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hourCycle: "h23",
+    timeZone: record.timezone || "America/Maceio"
+  }).format(new Date(record.recorded_at_utc));
 }
 
 function renderEmployeeAttendanceRecords() {
   const selected = $("#employeeRecordsFilter").value;
-  const visible = employeeAttendanceCache.filter(record => !selected || record.employee_id === selected);
-  $("#employeeRecordsSummary").textContent = visible.length + (visible.length === 1 ? " marcação carregada" : " marcações carregadas") + " · até 300 registros recentes";
+  const fromDate = $("#employeeRecordsFrom").value;
+  const toDate = $("#employeeRecordsTo").value;
   const rows = $("#employeeRecordsRows");
-  if (!visible.length) {
-    rows.innerHTML = '<tr><td colspan="4" class="table-empty">Nenhuma marcação encontrada.</td></tr>';
+
+  if (fromDate && toDate && fromDate > toDate) {
+    $("#employeeRecordsSummary").textContent = "Período inválido: a data inicial deve ser anterior ou igual à data final.";
+    rows.innerHTML = '<tr><td colspan="5" class="table-empty">Revise as datas selecionadas.</td></tr>';
     return;
   }
+
+  const visible = employeeAttendanceCache.filter(record => {
+    if (selected && record.employee_id !== selected) return false;
+    const recordDate = recordLocalDate(record);
+    if (fromDate && recordDate < fromDate) return false;
+    if (toDate && recordDate > toDate) return false;
+    return true;
+  });
+
+  const countLabel = visible.length === 1 ? "marcação exibida" : "marcações exibidas";
+  const loadedLabel = employeeAttendanceCache.length === 1 ? "marcação carregada" : "marcações carregadas";
+  const sourceLabel = selected ? "até 300 mais recentes do funcionário" : "até 300 mais recentes da empresa";
+  $("#employeeRecordsSummary").textContent =
+    visible.length + " " + countLabel + " · " + employeeAttendanceCache.length + " " + loadedLabel + " · " + sourceLabel;
+
+  if (!visible.length) {
+    rows.innerHTML = '<tr><td colspan="5" class="table-empty">Nenhuma marcação encontrada para os filtros selecionados.</td></tr>';
+    return;
+  }
+
   rows.innerHTML = visible.map(record => {
     const className = record.record_type === "break_start" ? "break" : record.record_type === "exit" ? "pending" : "working";
     return '<tr>' +
       '<td><b>' + escapeHtml(record.employee_name) + '</b><small>' + escapeHtml(record.employee_code) + '</small></td>' +
       '<td><span class="status ' + className + '">' + escapeHtml(employeeRecordLabels[record.record_type] || record.record_type) + '</span></td>' +
-      '<td><b>' + escapeHtml(formatServerDateTime(record)) + '</b></td>' +
-      '<td>' + escapeHtml(record.source === "online" ? "Celular · online" : record.source) + '</td>' +
+      '<td>' + escapeHtml(formatRecordDate(record)) + '</td>' +
+      '<td><b class="record-time">' + escapeHtml(formatRecordTime(record)) + '</b></td>' +
+      '<td><span class="record-source">' + escapeHtml(record.source === "online" ? "Celular · online" : record.source) + '</span></td>' +
       '</tr>';
   }).join("");
 }
 
 async function loadEmployeeAttendanceRecords() {
   const rows = $("#employeeRecordsRows");
-  rows.innerHTML = '<tr><td colspan="4" class="table-empty">Carregando marcações...</td></tr>';
+  rows.innerHTML = '<tr><td colspan="5" class="table-empty">Carregando marcações...</td></tr>';
   try {
+    const selectedEmployee = $("#employeeRecordsFilter").value;
+    const recordPath = selectedEmployee
+      ? "employee-records?employeeId=" + encodeURIComponent(selectedEmployee)
+      : "employee-records";
     const [recordResult, employeeResult] = await Promise.all([
-      apiRequest("employee-records"),
+      apiRequest(recordPath),
       apiRequest("employees?status=all")
     ]);
     employeeAttendanceCache = Array.isArray(recordResult.records) ? recordResult.records : [];
     const select = $("#employeeRecordsFilter");
-    const previous = select.value;
+    const previous = selectedEmployee;
     const employees = Array.isArray(employeeResult.employees) ? employeeResult.employees : [];
     select.innerHTML = '<option value="">Todos os funcionários</option>' +
       employees.map(employee =>
@@ -597,13 +643,21 @@ async function loadEmployeeAttendanceRecords() {
     if (employees.some(employee => employee.id === previous)) select.value = previous;
     renderEmployeeAttendanceRecords();
   } catch (error) {
-    rows.innerHTML = '<tr><td colspan="4" class="table-empty">' + escapeHtml(error.message) + '</td></tr>';
+    rows.innerHTML = '<tr><td colspan="5" class="table-empty">' + escapeHtml(error.message) + '</td></tr>';
     $("#employeeRecordsSummary").textContent = "Não foi possível carregar o histórico.";
     notify(error.message);
   }
 }
 
-$("#employeeRecordsFilter").addEventListener("change", renderEmployeeAttendanceRecords);
+$("#employeeRecordsFilter").addEventListener("change", loadEmployeeAttendanceRecords);
+$("#employeeRecordsFrom").addEventListener("change", renderEmployeeAttendanceRecords);
+$("#employeeRecordsTo").addEventListener("change", renderEmployeeAttendanceRecords);
+$("#clearEmployeeRecordsFiltersBtn").addEventListener("click", () => {
+  $("#employeeRecordsFilter").value = "";
+  $("#employeeRecordsFrom").value = "";
+  $("#employeeRecordsTo").value = "";
+  loadEmployeeAttendanceRecords();
+});
 $("#refreshEmployeeRecordsBtn").addEventListener("click", loadEmployeeAttendanceRecords);
 
 $("#copyCompanyEmployeeAccessCodeBtn").addEventListener("click", async () => {

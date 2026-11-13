@@ -203,14 +203,28 @@
           </div>
           <div class="notice warning"><b>⚠</b><div><strong>Ambiente de desenvolvimento</strong><p>As marcações são armazenadas com horário do servidor, mas esta versão ainda não implementa todos os requisitos para uso como REP-P oficial. Não utilize estes dados para fechamento legal da folha ou apuração oficial.</p></div></div>
           <section class="panel employee-records-list-panel">
-            <div class="employee-toolbar">
-              <div><h2>Histórico recente</h2><p id="employeeRecordsSummary">Carregando marcações...</p></div>
-              <div class="employee-filters"><select id="employeeRecordsFilter" aria-label="Filtrar por funcionário"><option value="">Todos os funcionários</option></select></div>
+            <div class="employee-toolbar employee-records-toolbar">
+              <div><h2>Histórico de marcações</h2><p id="employeeRecordsSummary">Carregando marcações...</p></div>
+              <div class="employee-filters employee-record-filters">
+                <div class="record-filter-field record-employee-filter">
+                  <label for="employeeRecordsFilter">Funcionário</label>
+                  <select id="employeeRecordsFilter" aria-label="Filtrar por funcionário"><option value="">Todos os funcionários</option></select>
+                </div>
+                <div class="record-filter-field">
+                  <label for="employeeRecordsFrom">Data inicial</label>
+                  <input id="employeeRecordsFrom" type="date" aria-label="Data inicial do período">
+                </div>
+                <div class="record-filter-field">
+                  <label for="employeeRecordsTo">Data final</label>
+                  <input id="employeeRecordsTo" type="date" aria-label="Data final do período">
+                </div>
+                <button class="button secondary record-filter-clear" id="clearEmployeeRecordsFiltersBtn" type="button">Limpar filtros</button>
+              </div>
             </div>
             <div class="employee-table-wrap">
               <table class="demo-record-table">
-                <thead><tr><th>FUNCIONÁRIO</th><th>MARCAÇÃO</th><th>DATA E HORA</th><th>ORIGEM</th></tr></thead>
-                <tbody id="employeeRecordsRows"><tr><td colspan="4" class="table-empty">Carregando...</td></tr></tbody>
+                <thead><tr><th>FUNCIONÁRIO</th><th>MARCAÇÃO</th><th>DATA</th><th>HORÁRIO</th><th>ORIGEM</th></tr></thead>
+                <tbody id="employeeRecordsRows"><tr><td colspan="5" class="table-empty">Carregando...</td></tr></tbody>
               </table>
             </div>
           </section>

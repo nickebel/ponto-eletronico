@@ -174,3 +174,34 @@
  .employee-history-head{align-items:flex-start}
  .employee-portal-footer{flex-direction:column}
 }
+
+
+/* Filtros e leitura do histórico administrativo */
+.employee-records-toolbar{align-items:flex-end}
+.employee-records-toolbar>div:first-child{align-self:center;min-width:190px}
+.employee-record-filters{display:flex;align-items:flex-end;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+.record-filter-field{display:flex;flex-direction:column;gap:5px;min-width:135px}
+.record-filter-field label{font-size:9px;font-weight:700;color:#7b8798}
+.employee-record-filters .record-filter-field select,
+.employee-record-filters .record-filter-field input{width:100%;height:38px;min-width:0;padding:0 10px;border:1px solid #dfe5ee;border-radius:7px;background:#fbfcfe;color:#25344b;font:11px 'DM Sans',sans-serif;outline:none}
+.employee-record-filters .record-filter-field select:focus,
+.employee-record-filters .record-filter-field input:focus{border-color:#6e8bdb;box-shadow:0 0 0 3px #6e8bdb20}
+.employee-record-filters .record-employee-filter{min-width:205px}
+.employee-record-filters .record-filter-clear{height:38px;white-space:nowrap}
+.employee-records-list-panel .demo-record-table{min-width:790px}
+.employee-records-list-panel .demo-record-table td:nth-child(3){color:#66758b}
+.employee-records-list-panel .record-time{font:700 11px 'DM Sans',sans-serif;color:#2e4265;font-variant-numeric:tabular-nums}
+.record-source{display:inline-flex;align-items:center;padding:5px 8px;border-radius:20px;background:#eef7f3;color:#398268;font-size:9px;font-weight:700}
+@media(max-width:1100px){
+  .employee-records-toolbar{align-items:flex-start}
+  .employee-records-toolbar>div:first-child{align-self:flex-start}
+  .employee-record-filters{width:100%;justify-content:flex-start;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .employee-record-filters .record-employee-filter{grid-column:1/-1}
+  .employee-record-filters .record-filter-clear{justify-self:start}
+}
+@media(max-width:520px){
+  .employee-record-filters{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .employee-record-filters .record-employee-filter{grid-column:1/-1}
+  .employee-record-filters .record-filter-clear{grid-column:1/-1;justify-self:stretch;width:100%}
+  .employee-records-toolbar{padding:14px}
+}
