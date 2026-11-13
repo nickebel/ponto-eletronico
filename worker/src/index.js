@@ -3,11 +3,11 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:8787",
   "http://127.0.0.1:8787"
 ]);
-const ITERATIONS = 600000;
+const ITERATIONS = 100000;
 const SESSION_MS = 8 * 60 * 60 * 1000;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
-const DUMMY_HASH = "pbkdf2-sha256$600000$glzadZ3CQvdh0zSDT++29A==$kVhdPnRU/zj3gczSvI49nSIqn5TnUkLO2xcL/EkwgiU=";
+const DUMMY_HASH = "pbkdf2-sha256-hmac-pepper-v1$100000$glzadZ3CQvdh0zSDT++29A==$kVhdPnRU/zj3gczSvI49nSIqn5TnUkLO2xcL/EkwgiU=";
 
 function headers(origin) {
   const h = {
@@ -61,20 +61,32 @@ async function bodyJson(request) {
   if (new TextEncoder().encode(text).byteLength > 16000) throw new Error("REQUEST_TOO_LARGE");
   return JSON.parse(text);
 }
-async function makePasswordHash(password) {
+async function pepperPassword(password, pepper) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(pepper),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(password)));
+}
+async function makePasswordHash(password, pepper) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const passwordMaterial = await pepperPassword(password, pepper);
+  const material = await crypto.subtle.importKey("raw", passwordMaterial, "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits(
     { name: "PBKDF2", salt, iterations: ITERATIONS, hash: "SHA-256" }, material, 256
   );
-  return `pbkdf2-sha256$${ITERATIONS}$${toBase64(salt)}$${toBase64(new Uint8Array(bits))}`;
+  return `pbkdf2-sha256-hmac-pepper-v1${ITERATIONS}${toBase64(salt)}${toBase64(new Uint8Array(bits))}`;
 }
-async function checkPassword(password, stored) {
+async function checkPassword(password, stored, pepper) {
   try {
     const [algorithm, rawIterations, saltText, hashText] = stored.split("$");
     const iterations = Number(rawIterations);
-    if (algorithm !== "pbkdf2-sha256" || !Number.isInteger(iterations) || iterations < 600000 || iterations > 1200000) return false;
-    const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+    if (algorithm !== "pbkdf2-sha256-hmac-pepper-v1" || iterations !== ITERATIONS) return false;
+    const passwordMaterial = await pepperPassword(password, pepper);
+    const material = await crypto.subtle.importKey("raw", passwordMaterial, "PBKDF2", false, ["deriveBits"]);
     const bits = new Uint8Array(await crypto.subtle.deriveBits(
       { name: "PBKDF2", salt: fromBase64(saltText), iterations, hash: "SHA-256" }, material, 256
     ));
@@ -135,6 +147,9 @@ async function handleSetup(request, env, origin) {
   if (!safeEqual(request.headers.get("X-Bootstrap-Key") || "", env.BOOTSTRAP_SECRET)) {
     return reply({ error: "Chave temporária inválida." }, 403, origin);
   }
+  if (!env.PASSWORD_PEPPER || env.PASSWORD_PEPPER.length < 32) {
+    return reply({ error: "O segredo PASSWORD_PEPPER ainda não foi configurado no Worker." }, 503, origin);
+  }
 
   let data;
   try { data = await bodyJson(request); }
@@ -158,7 +173,7 @@ async function handleSetup(request, env, origin) {
     if (alreadyDone) return reply({ error: "A configuração inicial já foi concluída. Entre com seu login." }, 409, origin);
 
     setupStage = "hashing_admin_password";
-    const passwordHash = await makePasswordHash(password);
+    const passwordHash = await makePasswordHash(password, env.PASSWORD_PEPPER);
     const now = new Date().toISOString();
     const organizationId = crypto.randomUUID();
     const userId = crypto.randomUUID();
@@ -219,6 +234,9 @@ async function recordFailedLogin(db, key) {
   `).bind(key, now, now, LOGIN_WINDOW_MS, now, LOGIN_WINDOW_MS, now, now, LOGIN_WINDOW_MS, MAX_ATTEMPTS, now + LOGIN_WINDOW_MS).run();
 }
 async function handleLogin(request, env, origin) {
+  if (!env.PASSWORD_PEPPER || env.PASSWORD_PEPPER.length < 32) {
+    return reply({ error: "O segredo PASSWORD_PEPPER não está configurado no Worker." }, 503, origin);
+  }
   let data;
   try { data = await bodyJson(request); }
   catch (error) { return reply({ error: error.message === "REQUEST_TOO_LARGE" ? "Requisição muito grande." : "JSON inválido." }, 400, origin); }
@@ -240,7 +258,7 @@ async function handleLogin(request, env, origin) {
       "SELECT id,full_name,organization_id,email_normalized,password_hash,role FROM users WHERE email_normalized=? AND status='active' ORDER BY created_at LIMIT 1"
     ).bind(email).first();
 
-    const valid = await checkPassword(password, user?.password_hash || DUMMY_HASH);
+    const valid = await checkPassword(password, user?.password_hash || DUMMY_HASH, env.PASSWORD_PEPPER);
     if (!user || !valid) {
       await recordFailedLogin(env.DB, key);
       return reply({ error: "E-mail ou senha incorretos." }, 401, origin);
