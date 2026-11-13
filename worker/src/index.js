@@ -19,7 +19,7 @@ function headers(origin) {
   };
   if (origin && ALLOWED_ORIGINS.has(origin)) {
     h["Access-Control-Allow-Origin"] = origin;
-    h["Access-Control-Allow-Methods"] = "GET, POST, PUT, OPTIONS";
+    h["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS";
     h["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Bootstrap-Key";
     h["Access-Control-Max-Age"] = "86400";
   }
@@ -301,6 +301,139 @@ async function handleEmployees(request, env, origin, session, employeeId = null)
   }
 }
 
+
+function validTime(value) {
+  return typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+function scheduleInput(data) {
+  const employeeId = String(data.employeeId || "").trim();
+  const weekday = Number(data.weekday);
+  const startTime = String(data.startTime || "");
+  const breakStart = String(data.breakStart || "").trim() || null;
+  const breakEnd = String(data.breakEnd || "").trim() || null;
+  const endTime = String(data.endTime || "");
+  const effectiveFrom = String(data.effectiveFrom || "");
+  const effectiveUntil = String(data.effectiveUntil || "").trim() || null;
+
+  if (!employeeId) return { error: "Selecione um funcionário." };
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return { error: "Selecione um dia da semana válido." };
+  if (!validTime(startTime) || !validTime(endTime) || startTime >= endTime) {
+    return { error: "Informe horários válidos. Esta versão não aceita jornadas que atravessam a meia-noite." };
+  }
+  if ((breakStart && !breakEnd) || (!breakStart && breakEnd)) {
+    return { error: "Preencha o início e o fim do intervalo, ou deixe os dois vazios." };
+  }
+  if (breakStart && (!validTime(breakStart) || !validTime(breakEnd) || breakStart < startTime || breakEnd <= breakStart || breakEnd > endTime)) {
+    return { error: "O intervalo deve estar dentro da jornada e ter início anterior ao fim." };
+  }
+  if (!validDateOnly(effectiveFrom) || !effectiveFrom) return { error: "Informe uma data inicial válida para a vigência." };
+  if (!validDateOnly(effectiveUntil) || (effectiveUntil && effectiveUntil < effectiveFrom)) {
+    return { error: "A data final da vigência deve ser igual ou posterior à data inicial." };
+  }
+
+  return { value: { employeeId, weekday, startTime, breakStart, breakEnd, endTime, effectiveFrom, effectiveUntil } };
+}
+
+async function handleSchedules(request, env, origin, session, scheduleId = null) {
+  if (!session) return reply({ error: "Sessão inválida ou expirada." }, 401, origin);
+  if (!canManageEmployees(session)) return reply({ error: "Você não tem permissão para gerenciar jornadas." }, 403, origin);
+
+  const organizationId = session.organization.id;
+  const actorId = session.user.id;
+
+  if (request.method === "GET" && !scheduleId) {
+    try {
+      const employeeId = new URL(request.url).searchParams.get("employeeId");
+      const sql = employeeId
+        ? "SELECT s.id,s.employee_id,e.employee_code,e.full_name AS employee_name,s.weekday,s.start_time,s.break_start,s.break_end,s.end_time,s.effective_from,s.effective_until,s.created_at FROM work_schedules s JOIN employees e ON e.id=s.employee_id AND e.organization_id=s.organization_id WHERE s.organization_id=? AND s.employee_id=? ORDER BY e.full_name COLLATE NOCASE,s.weekday,s.effective_from DESC"
+        : "SELECT s.id,s.employee_id,e.employee_code,e.full_name AS employee_name,s.weekday,s.start_time,s.break_start,s.break_end,s.end_time,s.effective_from,s.effective_until,s.created_at FROM work_schedules s JOIN employees e ON e.id=s.employee_id AND e.organization_id=s.organization_id WHERE s.organization_id=? ORDER BY e.full_name COLLATE NOCASE,s.weekday,s.effective_from DESC";
+      const rows = employeeId
+        ? await env.DB.prepare(sql).bind(organizationId, employeeId).all()
+        : await env.DB.prepare(sql).bind(organizationId).all();
+      return reply({ schedules: rows.results || [] }, 200, origin);
+    } catch (error) {
+      console.error("List schedules failed:", error);
+      return reply({ error: "Não foi possível carregar as jornadas." }, 500, origin);
+    }
+  }
+
+  if (!["POST", "PUT", "DELETE"].includes(request.method)) return reply({ error: "Método não permitido." }, 405, origin);
+  if ((request.method === "POST" && scheduleId) || (request.method !== "POST" && !scheduleId)) {
+    return reply({ error: "Rota não encontrada." }, 404, origin);
+  }
+
+  const existing = scheduleId
+    ? await env.DB.prepare("SELECT id,employee_id,weekday,effective_from,effective_until FROM work_schedules WHERE id=? AND organization_id=?").bind(scheduleId, organizationId).first()
+    : null;
+  if (scheduleId && !existing) return reply({ error: "Jornada não encontrada." }, 404, origin);
+
+  if (request.method === "DELETE") {
+    const now = new Date().toISOString();
+    try {
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO audit_events (id,organization_id,actor_user_id,subject_type,subject_id,action,metadata_json,occurred_at_utc) VALUES (?,?,?,?,?,?,?,?)")
+          .bind(crypto.randomUUID(), organizationId, actorId, "work_schedule", scheduleId, "schedule.deleted", JSON.stringify({ employee_id: existing.employee_id, weekday: existing.weekday }), now),
+        env.DB.prepare("DELETE FROM work_schedules WHERE id=? AND organization_id=?").bind(scheduleId, organizationId)
+      ]);
+      return reply({ success: true }, 200, origin);
+    } catch (error) {
+      console.error("Delete schedule failed:", error);
+      return reply({ error: "Não foi possível remover a jornada." }, 500, origin);
+    }
+  }
+
+  let data;
+  try { data = await bodyJson(request); }
+  catch (error) { return reply({ error: error.message === "REQUEST_TOO_LARGE" ? "Requisição muito grande." : "JSON inválido." }, 400, origin); }
+
+  const parsed = scheduleInput(data);
+  if (parsed.error) return reply({ error: parsed.error }, 400, origin);
+  const schedule = parsed.value;
+
+  try {
+    const employee = await env.DB.prepare(
+      "SELECT id FROM employees WHERE id=? AND organization_id=?"
+    ).bind(schedule.employeeId, organizationId).first();
+    if (!employee) return reply({ error: "O funcionário selecionado não pertence a esta empresa." }, 400, origin);
+
+    const maxDate = schedule.effectiveUntil || "9999-12-31";
+    const conflictSql = scheduleId
+      ? "SELECT id FROM work_schedules WHERE organization_id=? AND employee_id=? AND weekday=? AND effective_from<=? AND (effective_until IS NULL OR effective_until>=?) AND id<>? LIMIT 1"
+      : "SELECT id FROM work_schedules WHERE organization_id=? AND employee_id=? AND weekday=? AND effective_from<=? AND (effective_until IS NULL OR effective_until>=?) LIMIT 1";
+    const conflict = scheduleId
+      ? await env.DB.prepare(conflictSql).bind(organizationId, schedule.employeeId, schedule.weekday, maxDate, schedule.effectiveFrom, scheduleId).first()
+      : await env.DB.prepare(conflictSql).bind(organizationId, schedule.employeeId, schedule.weekday, maxDate, schedule.effectiveFrom).first();
+    if (conflict) return reply({ error: "Já existe uma jornada para esse funcionário e dia com período de vigência sobreposto." }, 409, origin);
+
+    const now = new Date().toISOString();
+    if (request.method === "POST") {
+      const id = crypto.randomUUID();
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO work_schedules (id,organization_id,employee_id,weekday,start_time,break_start,break_end,end_time,effective_from,effective_until,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+          .bind(id, organizationId, schedule.employeeId, schedule.weekday, schedule.startTime, schedule.breakStart, schedule.breakEnd, schedule.endTime, schedule.effectiveFrom, schedule.effectiveUntil, now),
+        env.DB.prepare("INSERT INTO audit_events (id,organization_id,actor_user_id,subject_type,subject_id,action,metadata_json,occurred_at_utc) VALUES (?,?,?,?,?,?,?,?)")
+          .bind(crypto.randomUUID(), organizationId, actorId, "work_schedule", id, "schedule.created", JSON.stringify({ employee_id: schedule.employeeId, weekday: schedule.weekday, start_time: schedule.startTime, end_time: schedule.endTime }), now)
+      ]);
+      const created = await env.DB.prepare("SELECT s.id,s.employee_id,e.employee_code,e.full_name AS employee_name,s.weekday,s.start_time,s.break_start,s.break_end,s.end_time,s.effective_from,s.effective_until,s.created_at FROM work_schedules s JOIN employees e ON e.id=s.employee_id WHERE s.id=? AND s.organization_id=?").bind(id, organizationId).first();
+      return reply({ success: true, schedule: created }, 201, origin);
+    }
+
+    await env.DB.batch([
+      env.DB.prepare("UPDATE work_schedules SET employee_id=?,weekday=?,start_time=?,break_start=?,break_end=?,end_time=?,effective_from=?,effective_until=? WHERE id=? AND organization_id=?")
+        .bind(schedule.employeeId, schedule.weekday, schedule.startTime, schedule.breakStart, schedule.breakEnd, schedule.endTime, schedule.effectiveFrom, schedule.effectiveUntil, scheduleId, organizationId),
+      env.DB.prepare("INSERT INTO audit_events (id,organization_id,actor_user_id,subject_type,subject_id,action,metadata_json,occurred_at_utc) VALUES (?,?,?,?,?,?,?,?)")
+        .bind(crypto.randomUUID(), organizationId, actorId, "work_schedule", scheduleId, "schedule.updated", JSON.stringify({ employee_id: schedule.employeeId, weekday: schedule.weekday, start_time: schedule.startTime, end_time: schedule.endTime }), now)
+    ]);
+    const updated = await env.DB.prepare("SELECT s.id,s.employee_id,e.employee_code,e.full_name AS employee_name,s.weekday,s.start_time,s.break_start,s.break_end,s.end_time,s.effective_from,s.effective_until,s.created_at FROM work_schedules s JOIN employees e ON e.id=s.employee_id WHERE s.id=? AND s.organization_id=?").bind(scheduleId, organizationId).first();
+    return reply({ success: true, schedule: updated }, 200, origin);
+  } catch (error) {
+    console.error("Save schedule failed:", error);
+    if (String(error).includes("UNIQUE constraint failed")) return reply({ error: "Já existe uma jornada para esse funcionário e dia com a mesma data inicial." }, 409, origin);
+    return reply({ error: "Não foi possível salvar a jornada. Verifique os dados e tente novamente." }, 500, origin);
+  }
+}
+
 async function throttleKey(request, email) {
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   return digest(`${ip}|${email}`);
@@ -405,6 +538,16 @@ export default {
       if (employeeMatch && request.method === "PUT") {
         const session = await getSession(request, env.DB);
         return await handleEmployees(request, env, origin, session, employeeMatch[1]);
+      }
+
+      if (url.pathname === "/api/schedules" && ["GET", "POST"].includes(request.method)) {
+        const session = await getSession(request, env.DB);
+        return await handleSchedules(request, env, origin, session);
+      }
+      const scheduleMatch = url.pathname.match(/^\/api\/schedules\/([0-9a-f-]{36})$/i);
+      if (scheduleMatch && ["PUT", "DELETE"].includes(request.method)) {
+        const session = await getSession(request, env.DB);
+        return await handleSchedules(request, env, origin, session, scheduleMatch[1]);
       }
 
       if (url.pathname === "/api/auth/me" && request.method === "GET") {
