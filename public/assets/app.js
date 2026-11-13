@@ -6,6 +6,7 @@ const SESSION_KEY = "orbe_session_token";
 const labels = {
   overview: "Visão geral",
   employees: "Funcionários",
+  schedules: "Jornadas e escalas",
   records: "Registros de ponto",
   reports: "Relatórios",
   settings: "Configurações"
@@ -159,6 +160,7 @@ function navigate(view) {
   $("#sidebar").classList.remove("open");
   window.scrollTo({ top: 0, behavior: "smooth" });
   if (view === "employees") loadEmployees();
+  if (view === "schedules") loadSchedules();
 }
 $$(".nav-link").forEach(button => button.addEventListener("click", () => navigate(button.dataset.view)));
 $$("[data-go]").forEach(button => button.addEventListener("click", () => navigate(button.dataset.go)));
@@ -322,6 +324,172 @@ $("#employeeRows").addEventListener("click", async event => {
       });
       await loadEmployees();
       notify(activating ? "Funcionário reativado." : "Funcionário desativado.");
+    } catch (error) {
+      notify(error.message);
+      button.disabled = false;
+    }
+  }
+});
+
+
+const weekdayLabels = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
+let scheduleCache = [];
+let scheduleEmployees = [];
+
+function fillScheduleEmployeeSelects() {
+  const formSelect = $("#scheduleEmployee");
+  const filterSelect = $("#scheduleEmployeeFilter");
+  const formValue = formSelect.value;
+  const filterValue = filterSelect.value;
+  formSelect.innerHTML = '<option value="">Selecione um funcionário</option>' +
+    scheduleEmployees.map(employee =>
+      '<option value="' + escapeHtml(employee.id) + '">' +
+      escapeHtml(employee.employee_code + " · " + employee.full_name + (employee.status === "inactive" ? " (inativo)" : "")) +
+      '</option>'
+    ).join("");
+  filterSelect.innerHTML = '<option value="">Todos os funcionários</option>' +
+    scheduleEmployees.map(employee =>
+      '<option value="' + escapeHtml(employee.id) + '">' +
+      escapeHtml(employee.employee_code + " · " + employee.full_name) +
+      '</option>'
+    ).join("");
+  if (scheduleEmployees.some(employee => employee.id === formValue)) formSelect.value = formValue;
+  if (scheduleEmployees.some(employee => employee.id === filterValue)) filterSelect.value = filterValue;
+}
+
+function renderSchedules() {
+  const rows = $("#scheduleRows");
+  $("#scheduleSummary").textContent = scheduleCache.length + (scheduleCache.length === 1 ? " jornada cadastrada" : " jornadas cadastradas");
+  if (!scheduleCache.length) {
+    rows.innerHTML = '<tr><td colspan="6" class="table-empty">Nenhuma jornada cadastrada para este filtro.</td></tr>';
+    return;
+  }
+  rows.innerHTML = scheduleCache.map(schedule => {
+    const breakText = schedule.break_start && schedule.break_end
+      ? schedule.break_start + "–" + schedule.break_end
+      : "Sem intervalo informado";
+    const validity = displayDate(schedule.effective_from) + " a " + (schedule.effective_until ? displayDate(schedule.effective_until) : "Indefinido");
+    return '<tr>' +
+      '<td><b>' + escapeHtml(schedule.employee_name) + '</b><small>' + escapeHtml(schedule.employee_code) + '</small></td>' +
+      '<td>' + weekdayLabels[Number(schedule.weekday)] + '</td>' +
+      '<td><b>' + escapeHtml(schedule.start_time) + '–' + escapeHtml(schedule.end_time) + '</b></td>' +
+      '<td>' + escapeHtml(breakText) + '</td>' +
+      '<td>' + escapeHtml(validity) + '</td>' +
+      '<td><div class="row-actions">' +
+      '<button class="mini-action" type="button" data-schedule-action="edit" data-id="' + escapeHtml(schedule.id) + '">Editar</button>' +
+      '<button class="mini-action danger-action" type="button" data-schedule-action="delete" data-id="' + escapeHtml(schedule.id) + '">Excluir</button>' +
+      '</div></td></tr>';
+  }).join("");
+}
+
+async function loadSchedules() {
+  const body = $("#scheduleRows");
+  body.innerHTML = '<tr><td colspan="6" class="table-empty">Carregando jornadas...</td></tr>';
+  try {
+    const employeeResult = await apiRequest("employees?status=all");
+    scheduleEmployees = Array.isArray(employeeResult.employees) ? employeeResult.employees : [];
+    fillScheduleEmployeeSelects();
+    const filter = $("#scheduleEmployeeFilter").value;
+    const path = filter ? "schedules?employeeId=" + encodeURIComponent(filter) : "schedules";
+    const result = await apiRequest(path);
+    scheduleCache = Array.isArray(result.schedules) ? result.schedules : [];
+    renderSchedules();
+    $("#addScheduleBtn").disabled = scheduleEmployees.length === 0;
+    if (!scheduleEmployees.length) {
+      $("#scheduleSummary").textContent = "Cadastre um funcionário antes de criar uma jornada.";
+    }
+  } catch (error) {
+    body.innerHTML = '<tr><td colspan="6" class="table-empty">' + escapeHtml(error.message) + '</td></tr>';
+    notify(error.message);
+  }
+}
+
+function openScheduleForm(schedule) {
+  const form = $("#scheduleForm");
+  form.reset();
+  form.dataset.scheduleId = schedule ? schedule.id : "";
+  $("#scheduleFormTitle").textContent = schedule ? "Editar jornada" : "Nova jornada";
+  $("#saveScheduleBtn").textContent = schedule ? "Salvar alterações" : "Salvar jornada";
+  if (schedule) {
+    $("#scheduleEmployee").value = schedule.employee_id;
+    $("#scheduleWeekday").value = String(schedule.weekday);
+    $("#scheduleStart").value = schedule.start_time;
+    $("#scheduleEnd").value = schedule.end_time;
+    $("#scheduleBreakStart").value = schedule.break_start || "";
+    $("#scheduleBreakEnd").value = schedule.break_end || "";
+    $("#scheduleEffectiveFrom").value = schedule.effective_from;
+    $("#scheduleEffectiveUntil").value = schedule.effective_until || "";
+  } else {
+    $("#scheduleEffectiveFrom").value = new Date().toLocaleDateString("en-CA");
+    $("#scheduleWeekday").value = "1";
+  }
+  $("#scheduleFormPanel").hidden = false;
+  $("#scheduleFormPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+$("#addScheduleBtn").addEventListener("click", () => {
+  if (!scheduleEmployees.length) {
+    notify("Cadastre um funcionário antes de criar uma jornada.");
+    return;
+  }
+  openScheduleForm(null);
+});
+$("#cancelScheduleBtn").addEventListener("click", () => {
+  $("#scheduleFormPanel").hidden = true;
+  $("#scheduleForm").reset();
+});
+$("#refreshSchedulesBtn").addEventListener("click", loadSchedules);
+$("#scheduleEmployeeFilter").addEventListener("change", loadSchedules);
+
+$("#scheduleForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = $("#saveScheduleBtn");
+  const scheduleId = event.currentTarget.dataset.scheduleId;
+  const payload = {
+    employeeId: $("#scheduleEmployee").value,
+    weekday: Number($("#scheduleWeekday").value),
+    startTime: $("#scheduleStart").value,
+    endTime: $("#scheduleEnd").value,
+    breakStart: $("#scheduleBreakStart").value || null,
+    breakEnd: $("#scheduleBreakEnd").value || null,
+    effectiveFrom: $("#scheduleEffectiveFrom").value,
+    effectiveUntil: $("#scheduleEffectiveUntil").value || null
+  };
+  button.disabled = true;
+  button.textContent = "Salvando...";
+  try {
+    await apiRequest(scheduleId ? "schedules/" + encodeURIComponent(scheduleId) : "schedules", {
+      method: scheduleId ? "PUT" : "POST",
+      body: JSON.stringify(payload)
+    });
+    $("#scheduleFormPanel").hidden = true;
+    $("#scheduleForm").reset();
+    await loadSchedules();
+    notify(scheduleId ? "Jornada atualizada." : "Jornada cadastrada.");
+  } catch (error) {
+    notify(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = scheduleId ? "Salvar alterações" : "Salvar jornada";
+  }
+});
+
+$("#scheduleRows").addEventListener("click", async event => {
+  const button = event.target.closest("button[data-schedule-action]");
+  if (!button) return;
+  const schedule = scheduleCache.find(item => item.id === button.dataset.id);
+  if (!schedule) return;
+  if (button.dataset.scheduleAction === "edit") {
+    openScheduleForm(schedule);
+    return;
+  }
+  if (button.dataset.scheduleAction === "delete") {
+    if (!window.confirm("Confirma excluir a jornada de " + schedule.employee_name + " para " + weekdayLabels[Number(schedule.weekday)] + "?")) return;
+    button.disabled = true;
+    try {
+      await apiRequest("schedules/" + encodeURIComponent(schedule.id), { method: "DELETE" });
+      await loadSchedules();
+      notify("Jornada excluída.");
     } catch (error) {
       notify(error.message);
       button.disabled = false;
